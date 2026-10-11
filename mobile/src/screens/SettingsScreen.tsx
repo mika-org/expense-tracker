@@ -30,19 +30,19 @@ import { FadeInView, ScalePress } from "../components/AnimatedComponents";
 
 interface SettingsScreenProps {
   onBack: () => void;
+  onLogout?: () => void;
 }
 
-export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
+export const SettingsScreen = ({ onBack, onLogout }: SettingsScreenProps) => {
   const [currentUser, setCurrentUser] = useState<ApiUser | null>(getStoredUser());
   const [loading, setLoading] = useState(false);
 
   // Modal states
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   // Edit Profile form
-  const [editName, setEditName] = useState(currentUser?.name || "Aditia M");
+  const [editName, setEditName] = useState(currentUser?.name || "");
   const [editCurrency, setEditCurrency] = useState("IDR");
 
   // Change Password form
@@ -50,17 +50,13 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Login form
-  const [loginIdentifier, setLoginIdentifier] = useState("aditiam2311");
-  const [loginPassword, setLoginPassword] = useState("admin123");
-
   const loadProfile = async () => {
     setLoading(true);
     try {
       const u = await api.getProfile();
       if (u) {
         setCurrentUser(u);
-        setEditName(u.name);
+        setEditName(u.name || "");
       }
     } finally {
       setLoading(false);
@@ -112,28 +108,6 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
     }
   };
 
-  const handleLogin = async () => {
-    if (!loginIdentifier || !loginPassword) {
-      Alert.alert("Perhatian", "Email/username dan kata sandi wajib diisi.");
-      return;
-    }
-
-    setLoading(true);
-    const res = await api.login({
-      emailOrUsername: loginIdentifier,
-      password: loginPassword,
-    });
-    setLoading(false);
-
-    if (res.success && res.user) {
-      setCurrentUser(res.user);
-      setIsLoginModalOpen(false);
-      Alert.alert("Berhasil Masuk", `Selamat datang kembali, ${res.user.name}!`);
-    } else {
-      Alert.alert("Gagal Masuk", res.error || "Email/username atau kata sandi tidak valid.");
-    }
-  };
-
   const handleLogout = () => {
     Alert.alert(
       "Konfirmasi Keluar",
@@ -146,7 +120,9 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
           onPress: async () => {
             await api.logout();
             setCurrentUser(null);
-            Alert.alert("Telah Keluar", "Anda berhasil keluar. Silakan masuk kembali kapan saja.");
+            if (onLogout) {
+              onLogout();
+            }
           },
         },
       ]
@@ -188,15 +164,17 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
 
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>Nama Lengkap</Text>
-              <Text style={styles.fieldValue}>{currentUser?.name || "Aditia M"}</Text>
+              <Text style={styles.fieldValue}>{currentUser?.name || "-"}</Text>
             </View>
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>Email Akun</Text>
-              <Text style={styles.fieldValue}>{currentUser?.email || "hate274ever@gmail.com"}</Text>
+              <Text style={styles.fieldValue}>{currentUser?.email || "-"}</Text>
             </View>
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>Username</Text>
-              <Text style={styles.fieldValue}>aditiam2311</Text>
+              <Text style={styles.fieldValue}>
+                {currentUser?.email ? currentUser.email.split("@")[0] : "-"}
+              </Text>
             </View>
           </View>
         </FadeInView>
@@ -251,17 +229,9 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
           </View>
         </FadeInView>
 
-        {/* Account Session Actions (Login & Logout) */}
+        {/* Account Session Actions (Logout) */}
         <FadeInView delay={180}>
           <View style={styles.sessionBox}>
-            <ScalePress
-              style={styles.switchAccountBtn}
-              onPress={() => setIsLoginModalOpen(true)}
-            >
-              <LogIn size={18} color={colors.plum} />
-              <Text style={styles.switchAccountBtnText}>Ganti Akun / Masuk Ulang</Text>
-            </ScalePress>
-
             <ScalePress
               style={styles.logoutBtn}
               onPress={handleLogout}
@@ -354,54 +324,6 @@ export const SettingsScreen = ({ onBack }: SettingsScreenProps) => {
 
             <ScalePress style={styles.modalSaveBtn} onPress={handleChangePassword}>
               <Text style={styles.modalSaveBtnText}>Simpan Kata Sandi Baru</Text>
-            </ScalePress>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Login / Switch Account Modal */}
-      <Modal visible={isLoginModalOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Masuk / Ganti Akun</Text>
-              <TouchableOpacity onPress={() => setIsLoginModalOpen(false)}>
-                <X size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email atau Username</Text>
-              <TextInput
-                style={styles.textInput}
-                autoCapitalize="none"
-                placeholder="aditiam2311 atau hate274ever@gmail.com"
-                value={loginIdentifier}
-                onChangeText={setLoginIdentifier}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Kata Sandi</Text>
-              <TextInput
-                style={styles.textInput}
-                secureTextEntry
-                placeholder="Kata sandi akun"
-                value={loginPassword}
-                onChangeText={setLoginPassword}
-              />
-            </View>
-
-            <ScalePress
-              style={styles.modalSaveBtn}
-              onPress={handleLogin}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.modalSaveBtnText}>Masuk ke Akun</Text>
-              )}
             </ScalePress>
           </View>
         </View>

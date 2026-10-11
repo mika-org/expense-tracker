@@ -77,12 +77,7 @@ export interface ApiDashboardData {
 
 // Global active auth token in mobile session
 let currentAuthToken: string | null = null;
-let currentStoredUser: ApiUser | null = {
-  id: "7a4c6e28-ee3f-43f0-971b-7aca85de4c75",
-  name: "Aditia M",
-  email: "hate274ever@gmail.com",
-  currency: "IDR",
-};
+let currentStoredUser: ApiUser | null = null;
 
 export function setAuthToken(token: string | null) {
   currentAuthToken = token;
@@ -148,6 +143,7 @@ export const api = {
 
   async logout() {
     setAuthToken(null);
+    setStoredUser(null);
     return { success: true };
   },
 

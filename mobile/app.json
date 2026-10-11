@@ -8,11 +8,14 @@
     "splash": {
       "backgroundColor": "#2D1836"
     },
+    "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "com.expensetracker.app",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#2D1836"
       }
     }

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, StyleSheet } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, StyleSheet, ActivityIndicator } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { HomeScreen } from "./src/screens/HomeScreen";
@@ -11,21 +11,38 @@ import { SavingsScreen } from "./src/screens/SavingsScreen";
 import { DebtsScreen } from "./src/screens/DebtsScreen";
 import { CategoriesScreen } from "./src/screens/CategoriesScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { LoginScreen } from "./src/screens/LoginScreen";
 import { AddTransactionModal } from "./src/screens/AddTransactionModal";
 import { MoreMenuModal } from "./src/screens/MoreMenuModal";
 import { BottomTabBar } from "./src/components/BottomTabBar";
 import { AnimatedScreen } from "./src/components/AnimatedComponents";
 import { colors } from "./src/theme/colors";
 import { Transaction } from "./src/types";
-import { api } from "./src/services/api";
+import { api, getStoredUser, ApiUser } from "./src/services/api";
 
 export default function App() {
+  const [user, setUser] = useState<ApiUser | null>(getStoredUser());
+  const [checkingAuth, setCheckingAuth] = useState<boolean>(true);
   const [currentTab, setCurrentTab] = useState<string>("Discover");
   const [activeSubScreen, setActiveSubScreen] = useState<string | null>(null);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false);
   const [refreshCount, setRefreshCount] = useState<number>(0);
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const u = await api.getProfile();
+        setUser(u);
+      } catch {
+        setUser(null);
+      } finally {
+        setCheckingAuth(false);
+      }
+    }
+    checkAuth();
+  }, []);
 
   function handleSelectTransaction(tx: Transaction) {
     setSelectedTx(tx);
@@ -51,7 +68,15 @@ export default function App() {
       return <CategoriesScreen onBack={() => setActiveSubScreen(null)} />;
     }
     if (activeSubScreen === "Settings") {
-      return <SettingsScreen onBack={() => setActiveSubScreen(null)} />;
+      return (
+        <SettingsScreen
+          onBack={() => setActiveSubScreen(null)}
+          onLogout={() => {
+            setUser(null);
+            setActiveSubScreen(null);
+          }}
+        />
+      );
     }
 
     // Main 4 screens
@@ -80,6 +105,29 @@ export default function App() {
           />
         );
     }
+  }
+
+  if (checkingAuth) {
+    return (
+      <SafeAreaProvider>
+        <View style={[styles.container, { justifyContent: "center", alignItems: "center", backgroundColor: "#1E0E24" }]}>
+          <ActivityIndicator size="large" color={colors.coral} />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaProvider>
+        <LoginScreen
+          onLoginSuccess={(u) => {
+            setUser(u);
+            setRefreshCount((prev) => prev + 1);
+          }}
+        />
+      </SafeAreaProvider>
+    );
   }
 
   return (

@@ -16,12 +16,13 @@ export async function POST(request: Request) {
       return apiResponse({ error: "Email/username dan password wajib diisi." }, 400);
     }
 
-    // Match by email or username 'aditiam2311' -> 'hate274ever@gmail.com'
+    // Match dynamically by email, email prefix, or user name without hardcoding
     let user = await prisma.user.findFirst({
       where: {
         OR: [
           { email: identifier },
-          identifier === "aditiam2311" ? { email: "hate274ever@gmail.com" } : { email: identifier },
+          { email: { startsWith: `${identifier}@` } },
+          { name: { equals: identifier, mode: "insensitive" } },
         ],
       },
     });

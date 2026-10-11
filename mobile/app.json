@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Expense Tracker",
+    "slug": "expense-tracker-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#2D1836"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#2D1836"
+      }
+    }
+  }
+}

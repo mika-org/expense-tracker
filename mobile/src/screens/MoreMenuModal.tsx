@@ -5,8 +5,8 @@ import {
   TouchableOpacity,
   Modal,
   StyleSheet,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   PieChart,
   Wallet,
@@ -18,6 +18,7 @@ import {
   ChevronRight,
 } from "lucide-react-native";
 import { colors } from "../theme/colors";
+import { ScalePress } from "../components/AnimatedComponents";
 
 interface MoreMenuModalProps {
   visible: boolean;
@@ -68,8 +69,8 @@ export const MoreMenuModal = ({
     },
     {
       id: "Settings",
-      title: "Pengaturan Profil",
-      subtitle: "Mata uang IDR & zona waktu",
+      title: "Akun & Keamanan",
+      subtitle: "Login, ganti password & profil (Aditia M)",
       icon: <Settings size={22} color="#6B7280" />,
       bg: "#F3F4F6",
     },
@@ -96,14 +97,14 @@ export const MoreMenuModal = ({
 
           <View style={styles.list}>
             {menuItems.map((item) => (
-              <TouchableOpacity
+              <ScalePress
                 key={item.id}
                 style={styles.itemRow}
                 onPress={() => {
                   onClose();
                   onNavigate(item.id);
                 }}
-                activeOpacity={0.7}
+                activeScale={0.96}
               >
                 <View style={[styles.iconBox, { backgroundColor: item.bg }]}>
                   {item.icon}
@@ -113,7 +114,7 @@ export const MoreMenuModal = ({
                   <Text style={styles.itemSubtitle}>{item.subtitle}</Text>
                 </View>
                 <ChevronRight size={18} color={colors.textMuted} />
-              </TouchableOpacity>
+              </ScalePress>
             ))}
           </View>
         </SafeAreaView>

@@ -2,7 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { getAccountsAction, createAccountAction, deleteAccountAction } from "@/actions/accounts";
+import {
+  getAccountsAction,
+  createAccountAction,
+  updateAccountAction,
+  deleteAccountAction,
+} from "@/actions/accounts";
 import { formatRupiah } from "@/lib/money";
 import {
   Wallet,
@@ -12,6 +17,7 @@ import {
   PiggyBank,
   Plus,
   Trash2,
+  Edit2,
   X,
 } from "lucide-react";
 
@@ -19,8 +25,9 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  // New account form
+  // Form states
   const [name, setName] = useState("");
   const [accountType, setAccountType] = useState("bank");
   const [openingBalance, setOpeningBalance] = useState("0");
@@ -39,21 +46,49 @@ export default function AccountsPage() {
     loadAccounts();
   }, []);
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreateModal() {
+    setEditingId(null);
+    setName("");
+    setAccountType("bank");
+    setOpeningBalance("0");
+    setError(null);
+    setIsModalOpen(true);
+  }
+
+  function openEditModal(acc: any) {
+    setEditingId(acc.id);
+    setName(acc.name);
+    setAccountType(acc.accountType || "bank");
+    setOpeningBalance(acc.openingBalance ? acc.openingBalance.toString() : "0");
+    setError(null);
+    setIsModalOpen(true);
+  }
+
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
       const bal = parseFloat(openingBalance.replace(/[^0-9]/g, "")) || 0;
-      const res = await createAccountAction({
-        name,
-        accountType,
-        openingBalance: bal,
-      });
-      if (!res.success) throw new Error(res.error || "Gagal membuat akun");
+      if (editingId) {
+        const res = await updateAccountAction(editingId, {
+          name,
+          accountType,
+          openingBalance: bal,
+        });
+        if (!res.success) throw new Error(res.error || "Gagal memperbarui akun");
+      } else {
+        const res = await createAccountAction({
+          name,
+          accountType,
+          openingBalance: bal,
+        });
+        if (!res.success) throw new Error(res.error || "Gagal membuat akun");
+      }
 
       setName("");
       setOpeningBalance("0");
+      setEditingId(null);
       setIsModalOpen(false);
       loadAccounts();
     } catch (err: any) {
@@ -105,7 +140,7 @@ export default function AccountsPage() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={openCreateModal}
           className="flex items-center gap-2 px-5 py-2.5 bg-[#F27A54] hover:bg-[#e06b46] text-white font-bold text-xs rounded-2xl shadow-lg shadow-[#F27A54]/25 transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4 stroke-[3]" />
@@ -139,13 +174,22 @@ export default function AccountsPage() {
                 </div>
               </div>
 
-              <button
-                onClick={() => handleDelete(acc.id)}
-                title="Hapus / Arsipkan"
-                className="p-1.5 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => openEditModal(acc)}
+                  title="Ubah Akun"
+                  className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(acc.id)}
+                  title="Hapus / Arsipkan"
+                  className="p-1.5 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="pt-3 border-t border-slate-100">
@@ -161,12 +205,14 @@ export default function AccountsPage() {
         ))}
       </div>
 
-      {/* Add Account Modal */}
+      {/* Add / Edit Account Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in">
           <div className="w-full max-w-md bg-white border border-slate-100 rounded-[32px] p-6 text-slate-800 shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 className="text-base font-black text-slate-900">Tambah Akun / Dompet Baru</h3>
+              <h3 className="text-base font-black text-slate-900">
+                {editingId ? "Ubah Akun / Dompet" : "Tambah Akun / Dompet Baru"}
+              </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="text-slate-400 hover:text-slate-800 p-1 rounded-full"
@@ -181,7 +227,7 @@ export default function AccountsPage() {
               </div>
             )}
 
-            <form onSubmit={handleCreate} className="space-y-4">
+            <form onSubmit={handleSave} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Nama Akun</label>
                 <input
@@ -233,7 +279,7 @@ export default function AccountsPage() {
                   disabled={submitting}
                   className="px-5 py-2.5 bg-[#F27A54] hover:bg-[#e06b46] text-white font-bold text-xs rounded-2xl shadow-lg shadow-[#F27A54]/25"
                 >
-                  {submitting ? "Menyimpan..." : "Simpan Akun"}
+                  {submitting ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Akun"}
                 </button>
               </div>
             </form>

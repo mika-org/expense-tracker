@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { getActiveBudgetAction } from "@/actions/budgets";
+import { getActiveBudgetAction, saveBudgetAction } from "@/actions/budgets";
+import { getCategoriesAction } from "@/actions/categories";
 import { formatRupiah } from "@/lib/money";
 import {
   PieChart,
@@ -10,11 +11,13 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
+  Sparkles,
 } from "lucide-react";
 
 export default function BudgetsPage() {
   const [budget, setBudget] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [applying, setApplying] = useState(false);
 
   // Simulation calculator state
   const [simIncome, setSimIncome] = useState(15000000);
@@ -31,6 +34,49 @@ export default function BudgetsPage() {
   }, []);
 
   const totalSimPct = simNeeds + simWants + simSavings;
+
+  async function handleApplySimulation() {
+    setApplying(true);
+    try {
+      const cats = await getCategoriesAction();
+      const expenseCats = cats.filter((c: any) => c.type === "expense");
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+
+      const items = expenseCats.slice(0, 6).map((c: any, idx: number) => {
+        const pct = idx === 0 ? 30 : idx === 1 ? 25 : idx === 2 ? 20 : 15;
+        const val = Math.round((simIncome * pct) / 100);
+        return {
+          categoryId: c.id,
+          amountType: "fixed" as const,
+          amountValue: val,
+        };
+      });
+
+      if (items.length === 0) {
+        alert("Tidak ada kategori pengeluaran ditemukan.");
+        return;
+      }
+
+      await saveBudgetAction({
+        name: `Anggaran ${now.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}`,
+        startDate: startOfMonth,
+        endDate: endOfMonth,
+        allocationMethod: "hybrid",
+        incomeBasis: simIncome,
+        items,
+      });
+
+      const updated = await getActiveBudgetAction();
+      setBudget(updated);
+      alert("Simulasi berhasil diterapkan sebagai anggaran aktif!");
+    } catch (err: any) {
+      alert(err.message || "Gagal menerapkan anggaran");
+    } finally {
+      setApplying(false);
+    }
+  }
 
   return (
     <AppShell
@@ -337,6 +383,20 @@ export default function BudgetsPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <p className="text-xs text-slate-500 font-medium">
+            Ingin menggunakan hasil kalkulator di atas sebagai acuan pengeluaran bulan ini?
+          </p>
+          <button
+            onClick={handleApplySimulation}
+            disabled={applying}
+            className="px-5 py-2.5 bg-[#2D1836] hover:bg-[#3d2149] text-white text-xs font-bold rounded-2xl shadow-md transition-all flex items-center gap-2 self-start sm:self-auto"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#F27A54]" />
+            {applying ? "Menerapkan..." : "Terapkan Sebagai Anggaran Aktif"}
+          </button>
         </div>
       </div>
     </AppShell>

@@ -13,17 +13,19 @@ export const CategoryPills = ({
   activeCategory,
   onSelect,
 }: CategoryPillsProps) => {
+  const uniqueCategories = Array.from(new Set(categories));
+
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.container}
     >
-      {categories.map((cat) => {
+      {uniqueCategories.map((cat, idx) => {
         const isActive = cat === activeCategory;
         return (
           <TouchableOpacity
-            key={cat}
+            key={`${cat}-${idx}`}
             style={[styles.pill, isActive ? styles.pillActive : styles.pillInactive]}
             onPress={() => onSelect(cat)}
             activeOpacity={0.8}

@@ -68,7 +68,9 @@ export const TransactionCard = ({
         <Text style={styles.nameText} numberOfLines={1}>
           {item.name}
         </Text>
-        <Text style={styles.amountText}>- ${item.amount.toFixed(2)}</Text>
+        <Text style={styles.amountText}>
+          - Rp {Number(item.amount).toLocaleString("id-ID")}
+        </Text>
       </View>
 
       <View style={styles.footer}>
@@ -77,7 +79,9 @@ export const TransactionCard = ({
           <Text style={styles.dateText}>{item.dateLabel}</Text>
         </View>
         {item.tax !== undefined ? (
-          <Text style={styles.taxText}>Tax: ${item.tax.toFixed(2)}</Text>
+          <Text style={styles.taxText}>
+            Pajak: Rp {Number(item.tax).toLocaleString("id-ID")}
+          </Text>
         ) : null}
       </View>
     </AnimatedCard>

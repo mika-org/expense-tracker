@@ -2,10 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { getDebtsAction, createDebtAction, payDebtAction } from "@/actions/debts";
+import {
+  getDebtsAction,
+  createDebtAction,
+  payDebtAction,
+  deleteDebtAction,
+} from "@/actions/debts";
 import { formatRupiah } from "@/lib/money";
 import { formatDateIndo } from "@/lib/dates";
-import { Plus, CheckCircle2, Clock, Calendar, X, ArrowDownRight, ArrowUpRight } from "lucide-react";
+import {
+  Plus,
+  CheckCircle2,
+  Clock,
+  Calendar,
+  Trash2,
+  X,
+  ArrowDownRight,
+  ArrowUpRight,
+} from "lucide-react";
 
 export default function DebtsPage() {
   const [debts, setDebts] = useState<any[]>([]);
@@ -80,6 +94,13 @@ export default function DebtsPage() {
     setSelectedDebt(null);
     setSubmitting(false);
     loadDebts();
+  }
+
+  async function handleDeleteDebt(id: string) {
+    if (confirm("Apakah Anda yakin ingin menghapus catatan utang/piutang ini?")) {
+      await deleteDebtAction(id);
+      loadDebts();
+    }
   }
 
   const filteredDebts = debts.filter((d) => (activeTab === "all" ? true : d.type === activeTab));
@@ -158,15 +179,24 @@ export default function DebtsPage() {
                     {isDebt ? "Utang Saya" : "Piutang Saya"}
                   </span>
 
-                  {isPaid ? (
-                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" /> Lunas
-                    </span>
-                  ) : (
-                    <span className="text-xs font-bold text-amber-500 flex items-center gap-1">
-                      <Clock className="w-4 h-4" /> Aktif
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {isPaid ? (
+                      <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-4 h-4" /> Lunas
+                      </span>
+                    ) : (
+                      <span className="text-xs font-bold text-amber-500 flex items-center gap-1">
+                        <Clock className="w-4 h-4" /> Aktif
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleDeleteDebt(item.id)}
+                      title="Hapus Catatan"
+                      className="p-1.5 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <h3 className="text-base font-black text-slate-900 mb-0.5">{item.counterparty}</h3>

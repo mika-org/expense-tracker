@@ -1,5 +1,10 @@
 import { apiResponse, handleOptions } from "@/lib/api-auth";
-import { getDebtsAction, createDebtAction, payDebtAction } from "@/actions/debts";
+import {
+  getDebtsAction,
+  createDebtAction,
+  payDebtAction,
+  deleteDebtAction,
+} from "@/actions/debts";
 
 export async function OPTIONS() {
   return handleOptions();
@@ -27,3 +32,16 @@ export async function POST(request: Request) {
     return apiResponse({ error: error.message || "Failed to create debt" }, 500);
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) return apiResponse({ error: "ID utang/piutang wajib diisi" }, 400);
+    const result = await deleteDebtAction(id);
+    return apiResponse(result, result.success ? 200 : 400);
+  } catch (error: any) {
+    return apiResponse({ error: error.message || "Failed to delete debt" }, 500);
+  }
+}
+

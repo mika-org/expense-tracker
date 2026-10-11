@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from "react";
-import { View, Text, StyleSheet, Animated, Easing } from "react-native";
+import React, { useRef, useEffect, useState } from "react";
+import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from "react-native";
 import { colors } from "../theme/colors";
 import { MonthlyChartData } from "../types";
 
@@ -9,23 +9,28 @@ interface HeroOutcomeCardProps {
 }
 
 const defaultChartData: MonthlyChartData[] = [
-  { month: "Aug", amount: 45, active: false },
-  { month: "Oct", amount: 65, active: false },
-  { month: "Dec", amount: 55, active: false },
-  { month: "Feb", amount: 75, active: false },
-  { month: "Apr", amount: 90, active: true },
+  { month: "Jun", amount: 20, active: false },
+  { month: "Jul", amount: 35, active: false },
+  { month: "Ags", amount: 45, active: false },
+  { month: "Sep", amount: 30, active: false },
+  { month: "Okt", amount: 50, active: true },
 ];
 
 export const HeroOutcomeCard = ({
-  amount = "$12,560.00",
+  amount = "Rp 0",
   chartData = defaultChartData,
 }: HeroOutcomeCardProps) => {
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(chartData.length - 1);
+
   // Card Entrance Animations
   const cardScale = useRef(new Animated.Value(0.95)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
 
   // Staggered animated bar heights
   const barAnimValues = useRef(chartData.map(() => new Animated.Value(0))).current;
+
+  // Popover opacity animation
+  const popoverOpacity = useRef(new Animated.Value(1)).current;
 
   // Subtle floating pulse for orb watermark
   const orbAnim = useRef(new Animated.Value(0)).current;
@@ -49,11 +54,11 @@ export const HeroOutcomeCard = ({
     // 2. Rising bars animation with staggered delays
     const barAnimations = chartData.map((item, index) =>
       Animated.timing(barAnimValues[index], {
-        toValue: item.amount,
+        toValue: Math.max(14, item.amount),
         duration: 650,
         delay: 200 + index * 90,
         easing: Easing.out(Easing.back(1.5)),
-        useNativeDriver: false, // height requires layout
+        useNativeDriver: false,
       })
     );
     Animated.parallel(barAnimations).start();
@@ -77,10 +82,23 @@ export const HeroOutcomeCard = ({
     ).start();
   }, [cardOpacity, cardScale, barAnimValues, orbAnim, chartData]);
 
+  const handleBarPress = (index: number) => {
+    setSelectedIdx(index);
+    popoverOpacity.setValue(0);
+    Animated.spring(popoverOpacity, {
+      toValue: 1,
+      friction: 7,
+      tension: 60,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const orbScale = orbAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 1.15],
   });
+
+  const selectedItem = selectedIdx !== null ? chartData[selectedIdx] : null;
 
   return (
     <Animated.View
@@ -102,30 +120,51 @@ export const HeroOutcomeCard = ({
         ]}
       />
 
-      <Text style={styles.subtitle}>Outcome</Text>
-      <Text style={styles.amountText}>{amount}</Text>
+      <View style={styles.topRow}>
+        <View>
+          <Text style={styles.subtitle}>Pengeluaran Bulan Ini</Text>
+          <Text style={styles.amountText}>{amount}</Text>
+        </View>
 
-      {/* Mini Bar Chart with Rising Bars */}
+        {/* Clean Popover Info Box */}
+        {selectedItem && (
+          <Animated.View style={[styles.popoverBox, { opacity: popoverOpacity }]}>
+            <Text style={styles.popoverMonth}>{selectedItem.month}</Text>
+            <Text style={styles.popoverAmount}>
+              Rp {(selectedItem.amount * 50000).toLocaleString("id-ID")}
+            </Text>
+          </Animated.View>
+        )}
+      </View>
+
+      {/* Mini Bar Chart with Rising Bars & Popover Touch Interaction */}
       <View style={styles.chartWrapper}>
         {chartData.map((item, index) => {
+          const isSelected = selectedIdx === index;
           return (
-            <View key={index} style={styles.barColumn}>
+            <TouchableOpacity
+              key={index}
+              style={styles.barColumn}
+              activeOpacity={0.7}
+              onPress={() => handleBarPress(index)}
+            >
+              {isSelected && <View style={styles.popoverDot} />}
               <Animated.View
                 style={[
                   styles.bar,
                   { height: barAnimValues[index] },
-                  item.active ? styles.barActive : styles.barInactive,
+                  isSelected || item.active ? styles.barActive : styles.barInactive,
                 ]}
               />
               <Text
                 style={[
                   styles.monthLabel,
-                  item.active ? styles.monthLabelActive : null,
+                  isSelected || item.active ? styles.monthLabelActive : null,
                 ]}
               >
                 {item.month}
               </Text>
-            </View>
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -156,53 +195,85 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: "rgba(255, 255, 255, 0.08)",
   },
+  topRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#C6B8D1",
     fontWeight: "600",
-    marginBottom: 6,
+    marginBottom: 4,
   },
   amountText: {
-    fontSize: 34,
+    fontSize: 28,
     fontWeight: "900",
     color: colors.textWhite,
     letterSpacing: -0.5,
-    marginBottom: 26,
+  },
+  popoverBox: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "flex-end",
+  },
+  popoverMonth: {
+    fontSize: 11,
+    color: "#E5D9EE",
+    fontWeight: "700",
+  },
+  popoverAmount: {
+    fontSize: 13,
+    color: "#FFFFFF",
+    fontWeight: "900",
+    marginTop: 2,
+  },
+  popoverDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.coral,
+    marginBottom: 4,
   },
   chartWrapper: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    height: 105,
+    height: 100,
     paddingTop: 8,
   },
   barColumn: {
     alignItems: "center",
-    width: 32,
+    width: 44,
   },
   bar: {
-    width: 20,
-    borderRadius: 8,
+    width: 22,
+    borderRadius: 11,
     marginBottom: 8,
-  },
-  barInactive: {
-    backgroundColor: "#42284D",
   },
   barActive: {
     backgroundColor: colors.coral,
     shadowColor: colors.coral,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 6,
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
     elevation: 4,
   },
+  barInactive: {
+    backgroundColor: colors.plumLight,
+  },
   monthLabel: {
-    fontSize: 11,
-    color: "#8E7A99",
+    fontSize: 12,
+    color: "#B4A3C0",
     fontWeight: "600",
   },
   monthLabelActive: {
-    color: "#FFFFFF",
-    fontWeight: "700",
+    color: colors.textWhite,
+    fontWeight: "800",
   },
 });

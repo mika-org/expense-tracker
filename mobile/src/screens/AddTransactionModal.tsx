@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from "react-native";
 import { X, ArrowDownRight, ArrowUpRight } from "lucide-react-native";
 import { colors } from "../theme/colors";
+import { api } from "../services/api";
+import { ScalePress } from "../components/AnimatedComponents";
 
 export interface AddTransactionModalProps {
   visible: boolean;
@@ -23,6 +26,26 @@ export interface AddTransactionModalProps {
   }) => void;
 }
 
+const defaultExpenseCats = [
+  "Makanan & Minuman",
+  "Transportasi",
+  "Belanja",
+  "Tagihan & Utilitas",
+  "Tempat Tinggal & Kos",
+  "Hiburan",
+  "Nongkrong & Kopi",
+  "Kesehatan",
+];
+
+const defaultIncomeCats = [
+  "Gaji",
+  "Freelance",
+  "Bisnis",
+  "Investasi",
+  "Bonus & THR",
+  "Lainnya (Pemasukan)",
+];
+
 export const AddTransactionModal = ({
   visible,
   onClose,
@@ -31,19 +54,48 @@ export const AddTransactionModal = ({
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
   const [merchant, setMerchant] = useState("");
-  const [category, setCategory] = useState("Food & Drink");
+  const [category, setCategory] = useState("Makanan & Minuman");
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
 
-  const categories = ["Food & Drink", "Clothing", "Transport", "Electronics", "Groceries"];
+  useEffect(() => {
+    (async () => {
+      try {
+        const cats = await api.getCategories();
+        if (Array.isArray(cats) && cats.length > 0) {
+          setCategoriesList(cats);
+        }
+      } catch (e) {
+        console.warn("Failed to load categories for modal:", e);
+      }
+    })();
+  }, []);
+
+  const activeCategories = Array.from(
+    new Set(
+      (categoriesList.length > 0
+        ? categoriesList.filter((c) => c.type === type).map((c) => c.name)
+        : type === "expense"
+        ? defaultExpenseCats
+        : defaultIncomeCats
+      ).filter(Boolean)
+    )
+  );
+
+  useEffect(() => {
+    if (activeCategories.length > 0 && !activeCategories.includes(category)) {
+      setCategory(activeCategories[0]);
+    }
+  }, [type, categoriesList]);
 
   function handleSave() {
-    const parsed = parseFloat(amount);
+    const parsed = parseFloat(amount.replace(/[^0-9.]/g, ""));
     if (!parsed || parsed <= 0) return;
 
     if (onSave) {
       onSave({
         type,
         amount: parsed,
-        merchant: merchant || "New Transaction",
+        merchant: merchant.trim() || (type === "expense" ? "Pengeluaran Baru" : "Pemasukan Baru"),
         category,
       });
     }
@@ -67,14 +119,14 @@ export const AddTransactionModal = ({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Tambah Transaksi</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <ScalePress onPress={onClose} style={styles.closeBtn}>
               <X size={20} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </ScalePress>
           </View>
 
           {/* Toggle Type */}
           <View style={styles.typeToggle}>
-            <TouchableOpacity
+            <ScalePress
               style={[styles.typeBtn, type === "expense" ? styles.typeBtnActive : null]}
               onPress={() => setType("expense")}
             >
@@ -82,9 +134,9 @@ export const AddTransactionModal = ({
               <Text style={[styles.typeText, type === "expense" ? styles.typeTextActive : null]}>
                 Pengeluaran
               </Text>
-            </TouchableOpacity>
+            </ScalePress>
 
-            <TouchableOpacity
+            <ScalePress
               style={[styles.typeBtn, type === "income" ? styles.typeBtnActive : null]}
               onPress={() => setType("income")}
             >
@@ -92,17 +144,17 @@ export const AddTransactionModal = ({
               <Text style={[styles.typeText, type === "income" ? styles.typeTextActive : null]}>
                 Pemasukan
               </Text>
-            </TouchableOpacity>
+            </ScalePress>
           </View>
 
           {/* Amount Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Nominal ($)</Text>
+            <Text style={styles.inputLabel}>Nominal (Rp)</Text>
             <TextInput
               style={styles.amountInput}
-              placeholder="0.00"
+              placeholder="0"
               placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
+              keyboardType="numeric"
               value={amount}
               onChangeText={setAmount}
             />
@@ -110,10 +162,10 @@ export const AddTransactionModal = ({
 
           {/* Merchant / Store */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Toko / Pihak Terkait</Text>
+            <Text style={styles.inputLabel}>Deskripsi / Pihak Terkait</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="Contoh: Nike Store, Apple"
+              placeholder={type === "expense" ? "Contoh: Alfamart, Kopi Kenangan, Listrik" : "Contoh: Transfer Gaji, Klien Freelance"}
               placeholderTextColor={colors.textMuted}
               value={merchant}
               onChangeText={setMerchant}
@@ -123,12 +175,12 @@ export const AddTransactionModal = ({
           {/* Category Chips */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Pilih Kategori</Text>
-            <View style={styles.categoryWrap}>
-              {categories.map((c) => {
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+              {activeCategories.map((c, idx) => {
                 const isSelected = c === category;
                 return (
-                  <TouchableOpacity
-                    key={c}
+                  <ScalePress
+                    key={`${c}-${idx}`}
                     onPress={() => setCategory(c)}
                     style={[
                       styles.categoryChip,
@@ -143,16 +195,16 @@ export const AddTransactionModal = ({
                     >
                       {c}
                     </Text>
-                  </TouchableOpacity>
+                  </ScalePress>
                 );
               })}
-            </View>
+            </ScrollView>
           </View>
 
           {/* Save Button */}
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+          <ScalePress style={styles.saveBtn} onPress={handleSave}>
             <Text style={styles.saveBtnText}>Simpan Transaksi</Text>
-          </TouchableOpacity>
+          </ScalePress>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -203,7 +255,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 14,
     gap: 6,
   },
@@ -213,7 +265,7 @@ const styles = StyleSheet.create({
   typeText: {
     fontSize: 13,
     fontWeight: "700",
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   typeTextActive: {
     color: "#FFFFFF",
@@ -223,64 +275,57 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "700",
     color: colors.textSecondary,
-    marginBottom: 6,
+    marginBottom: 8,
+    textTransform: "uppercase",
   },
   amountInput: {
-    backgroundColor: colors.slateLight,
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
     fontSize: 26,
     fontWeight: "900",
     color: colors.textPrimary,
+    backgroundColor: colors.slateLight,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   textInput: {
-    backgroundColor: colors.slateLight,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     fontSize: 14,
     fontWeight: "600",
     color: colors.textPrimary,
+    backgroundColor: colors.slateLight,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  categoryWrap: {
+  categoryScroll: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8,
+    paddingVertical: 4,
   },
   categoryChip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.slateLight,
   },
   categoryChipSelected: {
-    backgroundColor: colors.plumPill,
-    borderColor: colors.plumPill,
+    backgroundColor: colors.coral,
   },
   categoryChipText: {
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "700",
     color: colors.textSecondary,
   },
   categoryChipTextSelected: {
     color: "#FFFFFF",
   },
   saveBtn: {
-    backgroundColor: colors.coral,
-    borderRadius: 22,
+    backgroundColor: colors.plum,
+    borderRadius: 24,
     paddingVertical: 16,
     alignItems: "center",
-    marginTop: 10,
-    shadowColor: colors.coral,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 4,
+    marginTop: 8,
   },
   saveBtnText: {
     color: "#FFFFFF",

@@ -6,10 +6,11 @@ import {
   getSavingsGoalsAction,
   createSavingsGoalAction,
   contributeSavingsAction,
+  deleteSavingsGoalAction,
 } from "@/actions/savings";
 import { formatRupiah } from "@/lib/money";
 import { formatDateIndo } from "@/lib/dates";
-import { PiggyBank, Plus, CheckCircle2, Calendar, X } from "lucide-react";
+import { PiggyBank, Plus, CheckCircle2, Calendar, Trash2, X } from "lucide-react";
 
 export default function SavingsPage() {
   const [goals, setGoals] = useState<any[]>([]);
@@ -81,6 +82,13 @@ export default function SavingsPage() {
     loadGoals();
   }
 
+  async function handleDeleteGoal(id: string) {
+    if (confirm("Apakah Anda yakin ingin menghapus target tabungan ini?")) {
+      await deleteSavingsGoalAction(id);
+      loadGoals();
+    }
+  }
+
   return (
     <AppShell
       title="Target Tabungan & Dana Darurat"
@@ -119,15 +127,24 @@ export default function SavingsPage() {
                   <div className="p-3.5 rounded-2xl bg-amber-50 text-amber-600">
                     <PiggyBank className="w-6 h-6" />
                   </div>
-                  {isDone ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Tercapai
-                    </span>
-                  ) : (
-                    <span className="text-xs font-black text-[#F27A54]">
-                      {goal.percentage}%
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {isDone ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Tercapai
+                      </span>
+                    ) : (
+                      <span className="text-xs font-black text-[#F27A54]">
+                        {goal.percentage}%
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleDeleteGoal(goal.id)}
+                      title="Hapus Target"
+                      className="p-1.5 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <h3 className="text-base font-extrabold text-slate-900 mb-1">{goal.name}</h3>

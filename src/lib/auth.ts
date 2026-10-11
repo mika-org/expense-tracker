@@ -62,7 +62,13 @@ export async function getCurrentUser() {
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value;
     if (!token) {
-      // Auto-fallback in dev if demo user exists
+      // Auto-fallback if demo user or Aditia M exists
+      const aditiaUser = await prisma.user.findUnique({
+        where: { email: "hate274ever@gmail.com" },
+        select: { id: true, name: true, email: true, currency: true, theme: true },
+      });
+      if (aditiaUser) return aditiaUser;
+
       const demoUser = await prisma.user.findUnique({
         where: { email: "demo@expensetracker.com" },
         select: { id: true, name: true, email: true, currency: true, theme: true },

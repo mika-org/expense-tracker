@@ -1,7 +1,8 @@
 import React, { useRef, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from "react-native";
+import { View, Text, StyleSheet, Animated } from "react-native";
 import { Compass, Receipt, Scan, BarChart2, MoreHorizontal } from "lucide-react-native";
 import { colors } from "../theme/colors";
+import { ScalePress } from "./AnimatedComponents";
 
 export interface BottomTabBarProps {
   currentTab: string;
@@ -23,7 +24,7 @@ export const BottomTabBar = ({
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.08,
+          toValue: 1.06,
           duration: 1400,
           useNativeDriver: true,
         }),
@@ -40,10 +41,10 @@ export const BottomTabBar = ({
     <View style={styles.wrapper}>
       <View style={styles.container}>
         {/* 1. Discover / Home */}
-        <TouchableOpacity
+        <ScalePress
           style={styles.tabItem}
           onPress={() => onTabPress("Discover")}
-          activeOpacity={0.7}
+          activeScale={0.92}
         >
           <Compass
             size={22}
@@ -58,13 +59,13 @@ export const BottomTabBar = ({
           >
             Discover
           </Text>
-        </TouchableOpacity>
+        </ScalePress>
 
         {/* 2. Receipts / Transactions */}
-        <TouchableOpacity
+        <ScalePress
           style={styles.tabItem}
           onPress={() => onTabPress("Receipts")}
-          activeOpacity={0.7}
+          activeScale={0.92}
         >
           <Receipt
             size={22}
@@ -79,26 +80,26 @@ export const BottomTabBar = ({
           >
             Receipts
           </Text>
-        </TouchableOpacity>
+        </ScalePress>
 
         {/* Center Floating Coral Scanner/Add Button with Pulse Animation */}
         <View style={styles.centerButtonContainer}>
           <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <TouchableOpacity
+            <ScalePress
               style={styles.centerButton}
               onPress={onCenterPress}
-              activeOpacity={0.85}
+              activeScale={0.90}
             >
               <Scan size={26} color="#FFFFFF" strokeWidth={2.5} />
-            </TouchableOpacity>
+            </ScalePress>
           </Animated.View>
         </View>
 
         {/* 3. Stats / Reports */}
-        <TouchableOpacity
+        <ScalePress
           style={styles.tabItem}
           onPress={() => onTabPress("Stats")}
-          activeOpacity={0.7}
+          activeScale={0.92}
         >
           <BarChart2
             size={22}
@@ -113,13 +114,13 @@ export const BottomTabBar = ({
           >
             Stats
           </Text>
-        </TouchableOpacity>
+        </ScalePress>
 
         {/* 4. Menu Icon Dots 3 (More Menu) */}
-        <TouchableOpacity
+        <ScalePress
           style={styles.tabItem}
           onPress={onMorePress}
-          activeOpacity={0.7}
+          activeScale={0.92}
         >
           <MoreHorizontal
             size={24}
@@ -134,7 +135,7 @@ export const BottomTabBar = ({
           >
             Menu
           </Text>
-        </TouchableOpacity>
+        </ScalePress>
       </View>
     </View>
   );

@@ -4,10 +4,10 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   RefreshControl,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Header } from "../components/Header";
 import { HeroOutcomeCard } from "../components/HeroOutcomeCard";
 import { TransactionRow } from "../components/TransactionRow";
@@ -22,79 +22,6 @@ interface HomeScreenProps {
   onSelectTransaction: (item: Transaction) => void;
   onSearchPress?: () => void;
 }
-
-const mockGroupedData: DateGroupedTransactions[] = [
-  {
-    dateLabel: "Today",
-    items: [
-      {
-        id: "1",
-        name: "Nike Store",
-        category: "Clothing",
-        amount: 734.0,
-        tax: 60.35,
-        date: "2026-04-11",
-        dateLabel: "Today",
-        iconType: "clothing",
-        type: "expense",
-      },
-    ],
-  },
-  {
-    dateLabel: "08 April",
-    items: [
-      {
-        id: "2",
-        name: "Apple Store",
-        category: "Electronics",
-        amount: 25.0,
-        tax: 4.5,
-        date: "2026-04-08",
-        dateLabel: "08 April",
-        iconType: "electronics",
-        type: "expense",
-      },
-      {
-        id: "3",
-        name: "Uber",
-        category: "Transport",
-        amount: 4.99,
-        tax: 0.8,
-        date: "2026-04-08",
-        dateLabel: "08 April",
-        iconType: "transport",
-        type: "expense",
-      },
-    ],
-  },
-  {
-    dateLabel: "07 April",
-    items: [
-      {
-        id: "4",
-        name: "Starbucks Coffee",
-        category: "Food & Drink",
-        amount: 6.5,
-        tax: 0.65,
-        date: "2026-04-07",
-        dateLabel: "07 April",
-        iconType: "food",
-        type: "expense",
-      },
-      {
-        id: "5",
-        name: "Whole Foods Market",
-        category: "Groceries",
-        amount: 142.3,
-        tax: 12.4,
-        date: "2026-04-07",
-        dateLabel: "07 April",
-        iconType: "food",
-        type: "expense",
-      },
-    ],
-  },
-];
 
 export const HomeScreen = ({
   onSelectTransaction,
@@ -120,12 +47,18 @@ export const HomeScreen = ({
     loadData();
   }, []);
 
-  const totalExpenseFormatted = dashboard?.summary
-    ? `$${dashboard.summary.totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
-    : "$12,560.00";
+  const totalExpenseFormatted = dashboard?.summary?.totalExpense !== undefined
+    ? `Rp ${Number(dashboard.summary.totalExpense).toLocaleString("id-ID")}`
+    : "Rp 0";
 
   const chartData = dashboard?.chartData && dashboard.chartData.length > 0
     ? dashboard.chartData
+    : dashboard?.cashFlowTimeline && dashboard.cashFlowTimeline.length > 0
+    ? dashboard.cashFlowTimeline.slice(0, 5).reverse().map((item, idx, arr) => ({
+        month: item.date,
+        amount: Math.round(item.expense / 100000), // scale to bar heights
+        active: idx === arr.length - 1,
+      }))
     : undefined;
 
   const displayedGroups: DateGroupedTransactions[] = (() => {
@@ -133,23 +66,36 @@ export const HomeScreen = ({
       // Group API transactions by dateLabel
       const groupsMap = new Map<string, Transaction[]>();
       for (const t of dashboard.recentTransactions) {
-        const label = t.dateLabel || "Recent";
+        let label = t.dateLabel;
+        if (!label && t.date) {
+          const d = new Date(t.date);
+          const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+          label = `${d.getDate()} ${months[d.getMonth()]}`;
+        }
+        if (!label) label = "Recent";
+
         if (!groupsMap.has(label)) {
           groupsMap.set(label, []);
         }
+
+        const catName = t.categoryName || t.category || "General";
+        const catLower = catName.toLowerCase();
+        const iconType = (catLower.includes("cloth") || catLower.includes("pakaian") ? "clothing" :
+                         catLower.includes("gadget") || catLower.includes("phone") || catLower.includes("elektronik") ? "electronics" :
+                         catLower.includes("trans") || catLower.includes("kendaraan") || catLower.includes("ride") ? "transport" :
+                         catLower.includes("makan") || catLower.includes("food") || catLower.includes("kopi") ? "food" : "general") as any;
+
         groupsMap.get(label)!.push({
           id: t.id,
-          name: t.merchant || "Transaksi",
-          merchant: t.merchant,
-          description: t.description,
-          category: t.category || "General",
+          name: t.description || t.merchant || "Transaksi",
+          merchant: t.merchant || t.description,
+          description: t.description || catName,
+          category: catName,
           amount: t.amount,
           taxAmount: t.taxAmount,
           date: t.date || new Date().toISOString(),
-          dateLabel: t.dateLabel,
-          iconType: (t.category?.toLowerCase().includes("cloth") ? "clothing" :
-                    t.category?.toLowerCase().includes("gadget") || t.category?.toLowerCase().includes("phone") ? "electronics" :
-                    t.category?.toLowerCase().includes("trans") ? "transport" : "food") as any,
+          dateLabel: label,
+          iconType,
           type: t.type,
         });
       }
@@ -158,7 +104,7 @@ export const HomeScreen = ({
         items,
       }));
     }
-    return mockGroupedData;
+    return [];
   })();
 
   return (
@@ -173,8 +119,8 @@ export const HomeScreen = ({
       >
         {/* Header from Screenshot */}
         <Header
-          greeting="Hello,"
-          userName={dashboard?.user?.name || "Priscilla"}
+          greeting="Halo,"
+          userName={dashboard?.user?.name || "Aditia M"}
           onSearchPress={onSearchPress}
         />
 
@@ -189,42 +135,51 @@ export const HomeScreen = ({
 
         {/* Transactions List: Card View vs Table View */}
         <View style={styles.transactionsWrapper}>
-          {displayedGroups.map((group, groupIndex) => (
-            <View key={groupIndex} style={styles.groupSection}>
-              <Text style={styles.groupHeader}>{group.dateLabel}</Text>
-
-              {viewMode === "card" ? (
-                // CARD VIEW (Rich visual cards with entrance animations)
-                <View style={styles.cardContainer}>
-                  {group.items.map((item, itemIdx) => (
-                    <TransactionCard
-                      key={item.id}
-                      item={item}
-                      delay={itemIdx * 80}
-                      onPress={() => onSelectTransaction(item)}
-                    />
-                  ))}
-                </View>
-              ) : (
-                // COMPACT TABLE VIEW
-                <View style={styles.tableContainer}>
-                  <View style={styles.tableHeader}>
-                    <Text style={styles.thDate}>Tanggal</Text>
-                    <Text style={styles.thName}>Pihak & Kategori</Text>
-                    <Text style={styles.thAmount}>Nominal</Text>
-                  </View>
-                  {group.items.map((item, i) => (
-                    <TransactionTableRow
-                      key={item.id}
-                      item={item}
-                      isEven={i % 2 === 1}
-                      onPress={() => onSelectTransaction(item)}
-                    />
-                  ))}
-                </View>
-              )}
+          {displayedGroups.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>Belum Ada Transaksi</Text>
+              <Text style={styles.emptySubtitle}>
+                Semua data dummy telah dibersihkan. Catat transaksi baru Anda dengan tombol (+) di bawah untuk mulai memantau pengeluaran.
+              </Text>
             </View>
-          ))}
+          ) : (
+            displayedGroups.map((group, groupIndex) => (
+              <View key={groupIndex} style={styles.groupSection}>
+                <Text style={styles.groupHeader}>{group.dateLabel}</Text>
+
+                {viewMode === "card" ? (
+                  // CARD VIEW (Rich visual cards with entrance animations)
+                  <View style={styles.cardContainer}>
+                    {group.items.map((item, itemIdx) => (
+                      <TransactionCard
+                        key={item.id}
+                        item={item}
+                        delay={itemIdx * 80}
+                        onPress={() => onSelectTransaction(item)}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  // COMPACT TABLE VIEW
+                  <View style={styles.tableContainer}>
+                    <View style={styles.tableHeader}>
+                      <Text style={styles.thDate}>Tanggal</Text>
+                      <Text style={styles.thName}>Pihak & Kategori</Text>
+                      <Text style={styles.thAmount}>Nominal</Text>
+                    </View>
+                    {group.items.map((item, i) => (
+                      <TransactionTableRow
+                        key={item.id}
+                        item={item}
+                        isEven={i % 2 === 1}
+                        onPress={() => onSelectTransaction(item)}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -309,5 +264,26 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: colors.textMuted,
+  },
+  emptyCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.textPrimary,
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: "center",
+    lineHeight: 18,
   },
 });

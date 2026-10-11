@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, StyleSheet } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { DetailScreen } from "./src/screens/DetailScreen";
 import { StatsScreen } from "./src/screens/StatsScreen";
@@ -13,6 +14,7 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { AddTransactionModal } from "./src/screens/AddTransactionModal";
 import { MoreMenuModal } from "./src/screens/MoreMenuModal";
 import { BottomTabBar } from "./src/components/BottomTabBar";
+import { AnimatedScreen } from "./src/components/AnimatedComponents";
 import { colors } from "./src/theme/colors";
 import { Transaction } from "./src/types";
 import { api } from "./src/services/api";
@@ -23,6 +25,7 @@ export default function App() {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false);
+  const [refreshCount, setRefreshCount] = useState<number>(0);
 
   function handleSelectTransaction(tx: Transaction) {
     setSelectedTx(tx);
@@ -80,44 +83,52 @@ export default function App() {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="dark" />
+    <SafeAreaProvider>
+      <View style={styles.container}>
+        <StatusBar style="dark" />
 
-      <View style={styles.content}>{renderCurrentScreen()}</View>
+        <AnimatedScreen
+          screenKey={`${activeSubScreen || currentTab}-${refreshCount}`}
+          style={styles.content}
+        >
+          {renderCurrentScreen()}
+        </AnimatedScreen>
 
-      {/* Floating Bottom Navigation with 4 primary menus + center button + 3-dots More Menu */}
-      <BottomTabBar
-        currentTab={activeSubScreen ? "More" : currentTab}
-        onTabPress={(tab) => {
-          setActiveSubScreen(null);
-          setCurrentTab(tab);
-        }}
-        onCenterPress={() => setIsAddModalOpen(true)}
-        onMorePress={() => setIsMoreMenuOpen(true)}
-      />
+        {/* Floating Bottom Navigation with 4 primary menus + center button + 3-dots More Menu */}
+        <BottomTabBar
+          currentTab={activeSubScreen ? "More" : currentTab}
+          onTabPress={(tab) => {
+            setActiveSubScreen(null);
+            setCurrentTab(tab);
+          }}
+          onCenterPress={() => setIsAddModalOpen(true)}
+          onMorePress={() => setIsMoreMenuOpen(true)}
+        />
 
-      {/* 3-Dots More Menu Modal Sheet */}
-      <MoreMenuModal
-        visible={isMoreMenuOpen}
-        onClose={() => setIsMoreMenuOpen(false)}
-        onNavigate={(screenId) => {
-          setActiveSubScreen(screenId);
-        }}
-      />
+        {/* 3-Dots More Menu Modal Sheet */}
+        <MoreMenuModal
+          visible={isMoreMenuOpen}
+          onClose={() => setIsMoreMenuOpen(false)}
+          onNavigate={(screenId) => {
+            setActiveSubScreen(screenId);
+          }}
+        />
 
-      {/* Add Transaction Sheet */}
-      <AddTransactionModal
-        visible={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSave={async (data) => {
-          try {
-            await api.createTransaction(data);
-          } catch (e) {
-            console.error("Save transaction error:", e);
-          }
-        }}
-      />
-    </View>
+        {/* Add Transaction Sheet */}
+        <AddTransactionModal
+          visible={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onSave={async (data) => {
+            try {
+              await api.createTransaction(data);
+              setRefreshCount((prev) => prev + 1);
+            } catch (e) {
+              console.error("Save transaction error:", e);
+            }
+          }}
+        />
+      </View>
+    </SafeAreaProvider>
   );
 }
 

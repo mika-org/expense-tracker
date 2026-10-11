@@ -216,3 +216,43 @@ export async function deleteTransactionAction(id: string) {
   revalidatePath("/", "layout");
   return { success: true };
 }
+
+export async function updateTransactionAction(data: {
+  id: string;
+  accountId?: string;
+  categoryId?: string;
+  type?: "income" | "expense" | "adjustment";
+  amount?: number;
+  transactionDate?: string;
+  description?: string;
+  counterparty?: string;
+  paymentMethod?: string;
+}) {
+  const user = await requireAuthUser();
+
+  const tx = await prisma.transaction.findFirst({
+    where: { id: data.id, userId: user.id },
+  });
+
+  if (!tx) {
+    return { success: false, error: "Transaksi tidak ditemukan." };
+  }
+
+  const updateData: any = {};
+  if (data.accountId) updateData.accountId = data.accountId;
+  if (data.categoryId !== undefined) updateData.categoryId = data.categoryId || null;
+  if (data.type) updateData.type = data.type;
+  if (data.amount && data.amount > 0) updateData.amount = data.amount;
+  if (data.transactionDate) updateData.transactionDate = new Date(data.transactionDate);
+  if (data.description !== undefined) updateData.description = data.description?.trim() || null;
+  if (data.counterparty !== undefined) updateData.counterparty = data.counterparty?.trim() || null;
+  if (data.paymentMethod !== undefined) updateData.paymentMethod = data.paymentMethod || null;
+
+  const updated = await prisma.transaction.update({
+    where: { id: data.id },
+    data: updateData,
+  });
+
+  revalidatePath("/", "layout");
+  return { success: true, transaction: updated };
+}

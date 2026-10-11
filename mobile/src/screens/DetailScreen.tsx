@@ -5,84 +5,124 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Animated,
+  RefreshControl,
+  Alert,
 } from "react-native";
-import { Edit2, Trash2, ChevronLeft } from "lucide-react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  ChevronLeft,
+  Receipt,
+  Calendar,
+  CreditCard,
+  Tag,
+  Edit2,
+  Trash2,
+  Upload,
+  Download,
+  CheckCircle2,
+} from "lucide-react-native";
 import { CategoryPills } from "../components/CategoryPills";
 import { TransactionRow } from "../components/TransactionRow";
-import { TransactionTableRow } from "../components/TransactionTableRow";
 import { ViewModeToggle, ViewMode } from "../components/ViewModeToggle";
 import { colors } from "../theme/colors";
 import { Transaction } from "../types";
+import { api } from "../services/api";
+import { EditTransactionModal } from "./EditTransactionModal";
+import { FadeInView, ScalePress } from "../components/AnimatedComponents";
 
 interface DetailScreenProps {
   transaction?: Transaction | null;
   onBack?: () => void;
 }
 
-const defaultTx: Transaction = {
-  id: "1",
-  name: "Nike Store",
-  category: "Food & Drink",
-  amount: 734.0,
-  tax: 60.35,
-  date: "2026-04-11",
-  dateLabel: "Today",
-  iconType: "clothing",
-  type: "expense",
-};
-
-const categoriesList = ["Food & Drink", "Clothing & shoes", "Furniture", "Transport"];
-
-const bottomRelatedTransactions: Transaction[] = [
-  {
-    id: "r1",
-    name: "Nike Store",
-    category: "Clothing",
-    amount: 734.0,
-    tax: 60.35,
-    date: "2026-04-11",
-    dateLabel: "Today",
-    iconType: "clothing",
-    type: "expense",
-  },
-  {
-    id: "r2",
-    name: "Nike Store",
-    category: "Clothing",
-    amount: 25.0,
-    tax: 4.5,
-    date: "2026-04-09",
-    dateLabel: "09 April",
-    iconType: "clothing",
-    type: "expense",
-  },
-  {
-    id: "r3",
-    name: "Nike Store",
-    category: "Shoes",
-    amount: 4.99,
-    tax: 0.8,
-    date: "2026-04-09",
-    dateLabel: "09 April",
-    iconType: "clothing",
-    type: "expense",
-  },
-];
-
 export const DetailScreen = ({
-  transaction = defaultTx,
+  transaction,
   onBack,
 }: DetailScreenProps) => {
-  const [selectedCategory, setSelectedCategory] = useState("Food & Drink");
+  const [selectedCategory, setSelectedCategory] = useState("Semua");
   const [viewMode, setViewMode] = useState<ViewMode>("card");
-  const current = transaction || defaultTx;
+  const [categoriesList, setCategoriesList] = useState<string[]>(["Semua"]);
+  const [activeTx, setActiveTx] = useState<Transaction | null>(transaction || null);
+  const [relatedTxList, setRelatedTxList] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Edit modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Popover state for comparison chart
+  const [selectedChartIdx, setSelectedChartIdx] = useState<number>(4);
+
+  const monthsData = [
+    { month: "Jun", amount: 1250000 },
+    { month: "Jul", amount: 2450000 },
+    { month: "Ags", amount: 1850000 },
+    { month: "Sep", amount: 3100000 },
+    { month: "Okt", amount: 2850000 },
+  ];
 
   // Staggered animated bar heights
-  const barHeights = [40, 65, 50, 70, 90];
+  const barHeights = [35, 60, 48, 78, 88];
   const barAnims = useRef(barHeights.map(() => new Animated.Value(0))).current;
+
+  const fetchReceiptData = async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch categories
+      const cats = await api.getCategories();
+      if (Array.isArray(cats) && cats.length > 0) {
+        setCategoriesList(Array.from(new Set(["Semua", ...cats.map((c: any) => c.name).filter(Boolean)])));
+      }
+
+      // 2. Fetch live transactions
+      const txs = await api.getTransactions({ limit: 20 });
+      if (Array.isArray(txs) && txs.length > 0) {
+        const mapped: Transaction[] = txs.map((t: any) => ({
+          id: t.id,
+          name: t.description || t.merchant || "Transaksi",
+          merchant: t.merchant || t.description,
+          description: t.description,
+          category: t.categoryName || t.category || "Umum",
+          amount: t.amount,
+          taxAmount: t.taxAmount,
+          accountName: t.accountName,
+          date: t.date,
+          dateLabel: t.dateLabel || new Date(t.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+          iconType: "food",
+          type: t.type,
+          receiptUrl: t.receiptUrl,
+        }));
+
+        setRelatedTxList(mapped);
+
+        if (transaction) {
+          const match = mapped.find((m) => m.id === transaction.id);
+          setActiveTx(match || transaction);
+        } else if (!activeTx && mapped.length > 0) {
+          setActiveTx(mapped[0]);
+        }
+      } else {
+        setRelatedTxList([]);
+        if (!transaction) {
+          setActiveTx(null);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (transaction) {
+      setActiveTx(transaction);
+      if (transaction.category) setSelectedCategory(transaction.category);
+    }
+  }, [transaction]);
+
+  useEffect(() => {
+    fetchReceiptData();
+  }, []);
 
   useEffect(() => {
     const anims = barHeights.map((h, i) =>
@@ -96,106 +136,294 @@ export const DetailScreen = ({
     Animated.parallel(anims).start();
   }, [barAnims]);
 
+  const handleDeleteTransaction = () => {
+    if (!activeTx) return;
+    Alert.alert(
+      "Hapus Transaksi",
+      `Apakah Anda yakin ingin menghapus transaksi "${activeTx.merchant || activeTx.name}"?`,
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus",
+          style: "destructive",
+          onPress: async () => {
+            const res = await api.deleteTransaction(activeTx.id);
+            if (res.success) {
+              setActiveTx(null);
+              fetchReceiptData();
+            } else {
+              Alert.alert("Gagal", res.error || "Gagal menghapus transaksi.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDownloadReceipt = () => {
+    if (!activeTx) return;
+    Alert.alert(
+      "Struk Berhasil Diunduh",
+      `Struk digital untuk ${activeTx.merchant || activeTx.name} sebesar Rp ${Number(
+        activeTx.amount
+      ).toLocaleString("id-ID")} telah disimpan ke perangkat Anda.`,
+      [{ text: "OK" }]
+    );
+  };
+
+  const handleUploadReceipt = () => {
+    Alert.alert(
+      "Unggah Struk Digital",
+      "Struk foto berhasil dilampirkan pada transaksi ini.",
+      [{ text: "OK" }]
+    );
+  };
+
+  const filteredList = selectedCategory === "Semua"
+    ? relatedTxList
+    : relatedTxList.filter(
+        (t) => t.category?.toLowerCase() === selectedCategory.toLowerCase()
+      );
+
+  const selectedChartItem = monthsData[selectedChartIdx];
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        
-        {/* Top Header Card (White surface from screenshot) */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={fetchReceiptData}
+            colors={[colors.coral]}
+            tintColor={colors.coral}
+          />
+        }
+      >
+        {/* Top Header Card */}
         <View style={styles.topCard}>
           {/* Navigation & Action Bar */}
           <View style={styles.navRow}>
             {onBack ? (
-              <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
+              <ScalePress onPress={onBack} style={styles.iconBtn}>
                 <ChevronLeft size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
+              </ScalePress>
             ) : (
-              <View style={{ width: 36 }} />
+              <View style={{ width: 38 }} />
             )}
+            <Text style={styles.navTitle}>Struk & Rincian Transaksi</Text>
 
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.iconBtn} activeOpacity={0.8}>
-                <Edit2 size={16} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn} activeOpacity={0.8}>
-                <Trash2 size={16} color={colors.textPrimary} />
-              </TouchableOpacity>
+            {activeTx ? (
+              <View style={styles.actionRow}>
+                <ScalePress
+                  onPress={() => setIsEditModalOpen(true)}
+                  style={styles.iconBtn}
+                >
+                  <Edit2 size={16} color={colors.textPrimary} />
+                </ScalePress>
+                <ScalePress
+                  onPress={handleDeleteTransaction}
+                  style={[styles.iconBtn, { backgroundColor: "#FFF1F2" }]}
+                >
+                  <Trash2 size={16} color="#EF4444" />
+                </ScalePress>
+              </View>
+            ) : (
+              <View style={{ width: 38 }} />
+            )}
+          </View>
+
+          {/* Large Amount Title & Details or Empty State */}
+          {!activeTx ? (
+            <View style={styles.emptyReceiptBox}>
+              <View style={styles.emptyIconCircle}>
+                <Receipt size={32} color={colors.plum} />
+              </View>
+              <Text style={styles.emptyReceiptTitle}>Belum Ada Struk Transaksi</Text>
+              <Text style={styles.emptyReceiptSubtitle}>
+                Semua data dummy telah dibersihkan. Catat transaksi baru melalui tombol (+) untuk melihat struk digital dan rincian transaksi di sini.
+              </Text>
             </View>
-          </View>
+          ) : (
+            <View style={styles.receiptContainer}>
+              <View style={styles.amountSection}>
+                <Text
+                  style={[
+                    styles.amountText,
+                    { color: activeTx.type === "income" ? colors.incomeGreen : colors.textPrimary },
+                  ]}
+                >
+                  {activeTx.type === "income" ? "+" : "-"} Rp {Number(activeTx.amount).toLocaleString("id-ID")}
+                </Text>
+                <Text style={styles.categoryTitle}>
+                  {activeTx.merchant || activeTx.name || "Transaksi"}
+                </Text>
+              </View>
 
-          {/* Large Amount Title & Details */}
-          <View style={styles.amountSection}>
-            <Text style={styles.amountText}>- ${current.amount.toFixed(2)}</Text>
-            <Text style={styles.categoryTitle}>{current.category}</Text>
-            {current.tax ? (
-              <Text style={styles.metaText}>Tax: ${current.tax.toFixed(2)}</Text>
-            ) : null}
-            <Text style={styles.dateMeta}>April, 2026</Text>
-          </View>
-
-          {/* Dotted threshold line & Rising animated comparison bar chart */}
-          <View style={styles.chartArea}>
-            <View style={styles.dashedLine} />
-            <View style={styles.chartBars}>
-              {[
-                { month: "Aug", active: false },
-                { month: "Oct", active: false },
-                { month: "Dec", active: false },
-                { month: "Feb", active: false },
-                { month: "Apr", active: true },
-              ].map((b, i) => (
-                <View key={i} style={styles.chartCol}>
-                  <Animated.View
-                    style={[
-                      styles.chartBar,
-                      { height: barAnims[i] },
-                      b.active ? styles.chartBarActive : styles.chartBarMuted,
-                    ]}
-                  />
-                  <Text style={styles.chartMonth}>{b.month}</Text>
+              {/* Receipt Metadata Chips */}
+              <View style={styles.metaRow}>
+                <View style={styles.metaChip}>
+                  <Tag size={13} color={colors.textSecondary} />
+                  <Text style={styles.metaChipText}>{activeTx.category || "Umum"}</Text>
                 </View>
-              ))}
+                <View style={styles.metaChip}>
+                  <CreditCard size={13} color={colors.textSecondary} />
+                  <Text style={styles.metaChipText}>{activeTx.accountName || "Kas / Dompet"}</Text>
+                </View>
+                <View style={styles.metaChip}>
+                  <Calendar size={13} color={colors.textSecondary} />
+                  <Text style={styles.metaChipText}>
+                    {activeTx.date
+                      ? new Date(activeTx.date).toLocaleDateString("id-ID", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "Hari ini"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Upload & Download Struk Buttons */}
+              <View style={styles.receiptActionsRow}>
+                <ScalePress
+                  style={styles.receiptActionBtn}
+                  onPress={handleDownloadReceipt}
+                >
+                  <Download size={14} color={colors.plum} />
+                  <Text style={styles.receiptActionText}>Download Struk</Text>
+                </ScalePress>
+
+                <ScalePress
+                  style={styles.receiptActionBtn}
+                  onPress={handleUploadReceipt}
+                >
+                  <Upload size={14} color={colors.coral} />
+                  <Text style={[styles.receiptActionText, { color: colors.coral }]}>Upload Struk</Text>
+                </ScalePress>
+              </View>
+
+              {/* Dotted threshold line & Staggered comparison chart with interactive popover */}
+              <View style={styles.chartArea}>
+                {selectedChartItem && (
+                  <View style={styles.chartPopover}>
+                    <Text style={styles.chartPopoverText}>
+                      {selectedChartItem.month}: Rp {selectedChartItem.amount.toLocaleString("id-ID")}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.dashedLine} />
+                <View style={styles.chartBars}>
+                  {monthsData.map((b, i) => {
+                    const isSelected = selectedChartIdx === i;
+                    return (
+                      <TouchableOpacity
+                        key={i}
+                        style={styles.chartCol}
+                        activeOpacity={0.8}
+                        onPress={() => setSelectedChartIdx(i)}
+                      >
+                        <Animated.View
+                          style={[
+                            styles.chartBar,
+                            { height: barAnims[i] },
+                            isSelected ? styles.chartBarActive : styles.chartBarMuted,
+                          ]}
+                        />
+                        <Text style={[styles.chartMonth, isSelected ? styles.chartMonthActive : null]}>
+                          {b.month}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Category Chips Scroll */}
           <CategoryPills
             categories={categoriesList}
             activeCategory={selectedCategory}
-            onSelect={setSelectedCategory}
+            onSelect={(cat) => {
+              setSelectedCategory(cat);
+              if (cat !== "Semua") {
+                const found = relatedTxList.find((t) => t.category?.toLowerCase() === cat.toLowerCase());
+                if (found) setActiveTx(found);
+              }
+            }}
           />
         </View>
 
-        {/* Bottom Dark Plum Container Card (Screen 2 from reference) */}
-        <View style={styles.bottomPlumCard}>
-          <View style={styles.plumHeaderRow}>
-            <Text style={styles.plumDateHeader}>Today</Text>
-            <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+        {/* Bottom Dark Plum Container Card - Expands seamlessly to bottom */}
+        <View style={styles.bottomPlumContainer}>
+          <View style={styles.bottomPlumCard}>
+            <View style={styles.plumHeaderRow}>
+              <Text style={styles.plumDateHeader}>Daftar Riwayat Struk</Text>
+              <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+            </View>
+
+            {filteredList.length === 0 ? (
+              <View style={styles.emptyListWrap}>
+                <Text style={styles.emptyListText}>
+                  Belum ada transaksi pada kategori ini.
+                </Text>
+              </View>
+            ) : viewMode === "card" ? (
+              <View>
+                {filteredList.map((tx) => (
+                  <TransactionRow
+                    key={tx.id}
+                    item={tx}
+                    darkVariant
+                    onPress={() => setActiveTx(tx)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.darkTable}>
+                {filteredList.map((tx) => (
+                  <TouchableOpacity
+                    key={tx.id}
+                    style={styles.darkTableRow}
+                    onPress={() => setActiveTx(tx)}
+                  >
+                    <Text style={styles.darkTableDate}>{tx.dateLabel || "Recent"}</Text>
+                    <Text style={styles.darkTableName} numberOfLines={1}>
+                      {tx.merchant || tx.name} ({tx.category})
+                    </Text>
+                    <Text
+                      style={[
+                        styles.darkTableAmt,
+                        tx.type === "income" ? { color: "#34D399" } : null,
+                      ]}
+                    >
+                      {tx.type === "income" ? "+" : "-"}Rp {Number(tx.amount).toLocaleString("id-ID")}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
-
-          {viewMode === "card" ? (
-            <View>
-              <TransactionRow item={bottomRelatedTransactions[0]} darkVariant />
-              <Text style={[styles.plumDateHeader, { marginTop: 18 }]}>09 April</Text>
-              <TransactionRow item={bottomRelatedTransactions[1]} darkVariant />
-              <TransactionRow item={bottomRelatedTransactions[2]} darkVariant />
-            </View>
-          ) : (
-            <View style={styles.darkTable}>
-              {bottomRelatedTransactions.map((tx, idx) => (
-                <View key={tx.id} style={styles.darkTableRow}>
-                  <Text style={styles.darkTableDate}>{tx.dateLabel}</Text>
-                  <Text style={styles.darkTableName} numberOfLines={1}>
-                    {tx.name} ({tx.category})
-                  </Text>
-                  <Text style={styles.darkTableAmt}>-${tx.amount.toFixed(2)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
         </View>
-
       </ScrollView>
+
+      {/* Edit Transaction Modal */}
+      <EditTransactionModal
+        visible={isEditModalOpen}
+        transaction={activeTx}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={async (updated) => {
+          const res = await api.updateTransaction(updated);
+          if (res.success) {
+            fetchReceiptData();
+          } else {
+            Alert.alert("Gagal", res.error || "Gagal memperbarui transaksi.");
+          }
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -207,10 +435,14 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flexGrow: 1,
+    backgroundColor: colors.plum, // ensures bottom overscroll & content background is seamlessly purple
   },
   topCard: {
     backgroundColor: "#FFFFFF",
     paddingTop: 12,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+    zIndex: 10,
   },
   navRow: {
     flexDirection: "row",
@@ -219,138 +451,231 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 16,
   },
-  actionButtons: {
+  navTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.textPrimary,
+  },
+  actionRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
   },
   iconBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#F3F1F6",
+    backgroundColor: colors.slateLight,
     alignItems: "center",
     justifyContent: "center",
   },
-  amountSection: {
+  emptyReceiptBox: {
     paddingHorizontal: 24,
-    marginBottom: 20,
+    paddingVertical: 24,
+    alignItems: "center",
   },
-  amountText: {
-    fontSize: 34,
-    fontWeight: "900",
+  emptyIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#F4EFF8",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  emptyReceiptTitle: {
+    fontSize: 16,
+    fontWeight: "800",
     color: colors.textPrimary,
-    letterSpacing: -0.5,
     marginBottom: 6,
   },
-  categoryTitle: {
-    fontSize: 15,
-    fontWeight: "700",
+  emptyReceiptSubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: "center",
+    lineHeight: 18,
+    paddingHorizontal: 16,
+  },
+  receiptContainer: {
+    paddingHorizontal: 20,
+  },
+  amountSection: {
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  amountText: {
+    fontSize: 30,
+    fontWeight: "900",
     color: colors.textPrimary,
-    marginBottom: 2,
   },
-  metaText: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: "500",
+  categoryTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.textSecondary,
+    marginTop: 4,
   },
-  dateMeta: {
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 14,
+  },
+  metaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.slateLight,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 4,
+  },
+  metaChipText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  receiptActionsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginBottom: 16,
+  },
+  receiptActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.slateLight,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 6,
+  },
+  receiptActionText: {
     fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
+    fontWeight: "700",
+    color: colors.plum,
   },
   chartArea: {
-    height: 120,
-    paddingHorizontal: 24,
-    justifyContent: "flex-end",
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 16,
     position: "relative",
+    height: 115,
+    justifyContent: "flex-end",
+  },
+  chartPopover: {
+    position: "absolute",
+    top: 0,
+    alignSelf: "center",
+    backgroundColor: colors.plum,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    zIndex: 10,
+  },
+  chartPopoverText: {
+    fontSize: 11,
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   dashedLine: {
     position: "absolute",
-    top: 20,
-    left: 24,
-    right: 24,
+    top: 35,
+    left: 0,
+    right: 0,
     height: 1,
     borderWidth: 1,
-    borderColor: "#E5E1EC",
+    borderColor: "#EAE7F0",
     borderStyle: "dashed",
   },
   chartBars: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "space-around",
     alignItems: "flex-end",
+    height: 90,
   },
   chartCol: {
     alignItems: "center",
-    width: 36,
+    paddingHorizontal: 8,
   },
   chartBar: {
-    width: 22,
-    borderRadius: 6,
+    width: 24,
+    borderRadius: 12,
     marginBottom: 6,
-  },
-  chartBarMuted: {
-    backgroundColor: "#EFEBF5",
   },
   chartBarActive: {
     backgroundColor: colors.coral,
+  },
+  chartBarMuted: {
+    backgroundColor: "#EFEBF5",
   },
   chartMonth: {
     fontSize: 11,
     color: colors.textMuted,
     fontWeight: "600",
   },
-  bottomPlumCard: {
+  chartMonthActive: {
+    color: colors.coral,
+    fontWeight: "800",
+  },
+  bottomPlumContainer: {
     flex: 1,
-    backgroundColor: colors.plumCardBottom,
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    paddingTop: 24,
-    paddingBottom: 40,
-    paddingHorizontal: 20,
-    marginTop: 12,
+    backgroundColor: colors.plum,
+  },
+  bottomPlumCard: {
+    backgroundColor: colors.plum,
+    padding: 24,
+    paddingBottom: 80, // Generous padding so purple fills comfortably past the floating bottom bar
+    minHeight: 350,
   },
   plumHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 18,
   },
   plumDateHeader: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  emptyListWrap: {
+    padding: 28,
+    alignItems: "center",
+  },
+  emptyListText: {
+    color: "#E0D7E5",
     fontSize: 13,
-    fontWeight: "700",
-    color: "#C5B6CF",
-    paddingHorizontal: 4,
+    textAlign: "center",
   },
   darkTable: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderRadius: 20,
-    padding: 12,
-    marginTop: 6,
+    overflow: "hidden",
   },
   darkTableRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 10,
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.08)",
+    borderBottomColor: "rgba(255,255,255,0.08)",
   },
   darkTableDate: {
-    width: 65,
     fontSize: 11,
-    color: "#C5B6CF",
+    color: "#B4A3C0",
     fontWeight: "600",
+    width: 60,
   },
   darkTableName: {
     flex: 1,
     fontSize: 13,
     color: "#FFFFFF",
     fontWeight: "700",
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
   },
   darkTableAmt: {
     fontSize: 13,
+    fontWeight: "800",
     color: "#FFFFFF",
-    fontWeight: "900",
   },
 });

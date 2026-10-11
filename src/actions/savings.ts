@@ -117,3 +117,18 @@ export async function contributeSavingsAction(data: {
   revalidatePath("/", "layout");
   return { success: true };
 }
+
+export async function deleteSavingsGoalAction(id: string) {
+  const user = await requireAuthUser();
+
+  await prisma.savingsContribution.deleteMany({
+    where: { goalId: id, userId: user.id },
+  });
+
+  await prisma.savingsGoal.deleteMany({
+    where: { id, userId: user.id },
+  });
+
+  revalidatePath("/", "layout");
+  return { success: true };
+}

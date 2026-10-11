@@ -10,8 +10,8 @@ export interface HeaderProps {
 }
 
 export const Header = ({
-  greeting = "Hello,",
-  userName = "Priscilla",
+  greeting = "Halo,",
+  userName = "Aditia M",
   onSearchPress,
 }: HeaderProps) => {
   return (
@@ -38,8 +38,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingTop: 24,
+    paddingBottom: 16,
   },
   greeting: {
     fontSize: 16,

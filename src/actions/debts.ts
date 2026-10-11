@@ -117,3 +117,18 @@ export async function payDebtAction(data: {
   revalidatePath("/", "layout");
   return { success: true };
 }
+
+export async function deleteDebtAction(id: string) {
+  const user = await requireAuthUser();
+
+  await prisma.debtPayment.deleteMany({
+    where: { debtId: id, userId: user.id },
+  });
+
+  await prisma.debt.deleteMany({
+    where: { id, userId: user.id },
+  });
+
+  revalidatePath("/", "layout");
+  return { success: true };
+}

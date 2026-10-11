@@ -44,7 +44,13 @@ export async function getApiUser(request: Request) {
     const user = await getCurrentUser();
     if (user) return user;
 
-    // 3. Fallback to demo user directly
+    // 3. Fallback to default user directly (Aditia M or Demo User)
+    const aditiaUser = await prisma.user.findUnique({
+      where: { email: "hate274ever@gmail.com" },
+      select: { id: true, name: true, email: true, currency: true, theme: true },
+    });
+    if (aditiaUser) return aditiaUser;
+
     const demoUser = await prisma.user.findUnique({
       where: { email: "demo@expensetracker.com" },
       select: { id: true, name: true, email: true, currency: true, theme: true },

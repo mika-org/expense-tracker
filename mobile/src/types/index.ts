@@ -1,9 +1,12 @@
 export interface Transaction {
   id: string;
   name: string; // e.g. "Nike Store", "Apple Store", "Uber"
+  merchant?: string;
+  description?: string;
   category: string; // e.g. "Clothing", "Electronics", "Transport"
   amount: number; // e.g. 734.00
   tax?: number; // e.g. 60.35
+  taxAmount?: number;
   date: string; // e.g. "2026-04-11"
   dateLabel: string; // e.g. "Today", "08 April", "07 April"
   iconType: "clothing" | "electronics" | "transport" | "food" | "general";

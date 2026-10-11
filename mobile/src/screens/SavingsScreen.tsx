@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,16 +11,38 @@ import {
 import { ChevronLeft, PiggyBank, Plus, CheckCircle2 } from "lucide-react-native";
 import { colors } from "../theme/colors";
 
+import { api } from "../services/api";
+
 interface SavingsScreenProps {
   onBack: () => void;
 }
 
+interface SavingsGoalItem {
+  id: string;
+  name: string;
+  target: number;
+  current: number;
+  pct: number;
+  date: string;
+}
+
 export const SavingsScreen = ({ onBack }: SavingsScreenProps) => {
-  const goals = [
+  const [goalsList, setGoalsList] = useState<SavingsGoalItem[]>([
     { id: "1", name: "Dana Darurat (6 Bulan)", target: 30000, current: 20000, pct: 67, date: "31 Des 2026" },
     { id: "2", name: "Liburan Akhir Tahun", target: 10000, current: 3500, pct: 35, date: "30 Nov 2026" },
     { id: "3", name: "Upgrade Gadget Laptop", target: 15000, current: 15000, pct: 100, date: "15 Mei 2026" },
-  ];
+  ]);
+
+  useEffect(() => {
+    (async () => {
+      const data = await api.getSavings();
+      if (data && data.length > 0) {
+        setGoalsList(data);
+      }
+    })();
+  }, []);
+
+  const goals = goalsList;
 
   return (
     <SafeAreaView style={styles.safeArea}>

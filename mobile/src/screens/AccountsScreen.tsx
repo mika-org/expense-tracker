@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,19 +11,41 @@ import {
 import { ChevronLeft, Building2, Smartphone, Wallet, PiggyBank, Plus } from "lucide-react-native";
 import { colors } from "../theme/colors";
 
+import { api } from "../services/api";
+
 interface AccountsScreenProps {
   onBack: () => void;
 }
 
 export const AccountsScreen = ({ onBack }: AccountsScreenProps) => {
-  const accounts = [
-    { id: "1", name: "Rekening BCA", type: "bank", balance: 12500.0, icon: <Building2 size={22} color="#3B82F6" />, bg: "#EFF6FF" },
-    { id: "2", name: "Dompet Tunai", type: "cash", balance: 750.0, icon: <Wallet size={22} color="#10B981" />, bg: "#ECFDF5" },
-    { id: "3", name: "GoPay / OVO", type: "ewallet", balance: 450.0, icon: <Smartphone size={22} color={colors.coral} />, bg: "#FFF7ED" },
-    { id: "4", name: "Bibit Reksadana", type: "savings", balance: 20000.0, icon: <PiggyBank size={22} color="#8B5CF6" />, bg: "#F5F3FF" },
-  ];
+  const [accountList, setAccountList] = useState([
+    { id: "1", name: "Rekening BCA", type: "bank", balance: 12500.0 },
+    { id: "2", name: "Dompet Tunai", type: "cash", balance: 750.0 },
+    { id: "3", name: "GoPay / OVO", type: "ewallet", balance: 450.0 },
+    { id: "4", name: "Bibit Reksadana", type: "savings", balance: 20000.0 },
+  ]);
 
-  const totalBalance = accounts.reduce((acc, curr) => acc + curr.balance, 0);
+  useEffect(() => {
+    (async () => {
+      const data = await api.getAccounts();
+      if (data && data.length > 0) {
+        setAccountList(data);
+      }
+    })();
+  }, []);
+
+  const accounts = accountList.map((acc, idx) => ({
+    ...acc,
+    icon: acc.type === "bank" ? <Building2 size={22} color="#3B82F6" /> :
+          acc.type === "cash" ? <Wallet size={22} color="#10B981" /> :
+          acc.type === "savings" ? <PiggyBank size={22} color="#8B5CF6" /> :
+          <Smartphone size={22} color={colors.coral} />,
+    bg: acc.type === "bank" ? "#EFF6FF" :
+        acc.type === "cash" ? "#ECFDF5" :
+        acc.type === "savings" ? "#F5F3FF" : "#FFF7ED",
+  }));
+
+  const totalBalance = accounts.reduce((acc, curr) => acc + (curr.balance || 0), 0);
 
   return (
     <SafeAreaView style={styles.safeArea}>

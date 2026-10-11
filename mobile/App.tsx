@@ -15,6 +15,7 @@ import { MoreMenuModal } from "./src/screens/MoreMenuModal";
 import { BottomTabBar } from "./src/components/BottomTabBar";
 import { colors } from "./src/theme/colors";
 import { Transaction } from "./src/types";
+import { api } from "./src/services/api";
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<string>("Discover");
@@ -108,8 +109,12 @@ export default function App() {
       <AddTransactionModal
         visible={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onSave={(data) => {
-          console.log("Transaction saved:", data);
+        onSave={async (data) => {
+          try {
+            await api.createTransaction(data);
+          } catch (e) {
+            console.error("Save transaction error:", e);
+          }
         }}
       />
     </View>

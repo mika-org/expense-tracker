@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,14 +11,15 @@ import {
 import { ChevronLeft, Plus } from "lucide-react-native";
 import { colors } from "../theme/colors";
 
+import { api } from "../services/api";
+
 interface CategoriesScreenProps {
   onBack: () => void;
 }
 
 export const CategoriesScreen = ({ onBack }: CategoriesScreenProps) => {
   const [tab, setTab] = useState<"expense" | "income">("expense");
-
-  const expenseCategories = [
+  const [expenseCategories, setExpenseCategories] = useState([
     { name: "Makanan & Minuman", color: "#EF4444" },
     { name: "Transportasi", color: "#F97316" },
     { name: "Tempat Tinggal", color: "#F59E0B" },
@@ -27,7 +28,16 @@ export const CategoriesScreen = ({ onBack }: CategoriesScreenProps) => {
     { name: "Belanja", color: "#3B82F6" },
     { name: "Hiburan", color: "#6366F1" },
     { name: "Kesehatan", color: "#10B981" },
-  ];
+  ]);
+
+  useEffect(() => {
+    (async () => {
+      const data = await api.getCategories();
+      if (data && data.length > 0) {
+        setExpenseCategories(data.map((c: any) => ({ name: c.name, color: c.color || "#F27A54" })));
+      }
+    })();
+  }, []);
 
   const incomeCategories = [
     { name: "Gaji Pokok", color: "#10B981" },

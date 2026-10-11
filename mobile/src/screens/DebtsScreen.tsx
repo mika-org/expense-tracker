@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,18 +11,30 @@ import {
 import { ChevronLeft, Plus, ArrowDownRight, ArrowUpRight, CheckCircle2, Clock } from "lucide-react-native";
 import { colors } from "../theme/colors";
 
+import { api } from "../services/api";
+
 interface DebtsScreenProps {
   onBack: () => void;
 }
 
 export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
   const [filter, setFilter] = useState<"all" | "debt" | "receivable">("all");
-
-  const debts = [
+  const [debtList, setDebtList] = useState([
     { id: "1", type: "debt", person: "Bank Mandiri (KPR)", initial: 50000, remaining: 35000, dueDate: "25 Apr 2026", status: "active" },
     { id: "2", type: "receivable", person: "Budi Santoso", initial: 1500, remaining: 500, dueDate: "30 Apr 2026", status: "active" },
     { id: "3", type: "debt", person: "Kartu Kredit", initial: 800, remaining: 0, dueDate: "10 Apr 2026", status: "paid" },
-  ];
+  ]);
+
+  useEffect(() => {
+    (async () => {
+      const data = await api.getDebts();
+      if (data && data.length > 0) {
+        setDebtList(data);
+      }
+    })();
+  }, []);
+
+  const debts = debtList;
 
   const filtered = debts.filter((d) => (filter === "all" ? true : d.type === filter));
 

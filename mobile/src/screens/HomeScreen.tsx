@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
+  RefreshControl,
 } from "react-native";
 import { Header } from "../components/Header";
 import { HeroOutcomeCard } from "../components/HeroOutcomeCard";
@@ -15,6 +16,7 @@ import { TransactionTableRow } from "../components/TransactionTableRow";
 import { ViewModeToggle, ViewMode } from "../components/ViewModeToggle";
 import { colors } from "../theme/colors";
 import { Transaction, DateGroupedTransactions } from "../types";
+import { api, ApiDashboardData } from "../services/api";
 
 interface HomeScreenProps {
   onSelectTransaction: (item: Transaction) => void;
@@ -99,6 +101,65 @@ export const HomeScreen = ({
   onSearchPress,
 }: HomeScreenProps) => {
   const [viewMode, setViewMode] = useState<ViewMode>("card");
+  const [loading, setLoading] = useState(false);
+  const [dashboard, setDashboard] = useState<ApiDashboardData | null>(null);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getDashboard();
+      if (data) {
+        setDashboard(data);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const totalExpenseFormatted = dashboard?.summary
+    ? `$${dashboard.summary.totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+    : "$12,560.00";
+
+  const chartData = dashboard?.chartData && dashboard.chartData.length > 0
+    ? dashboard.chartData
+    : undefined;
+
+  const displayedGroups: DateGroupedTransactions[] = (() => {
+    if (dashboard?.recentTransactions && dashboard.recentTransactions.length > 0) {
+      // Group API transactions by dateLabel
+      const groupsMap = new Map<string, Transaction[]>();
+      for (const t of dashboard.recentTransactions) {
+        const label = t.dateLabel || "Recent";
+        if (!groupsMap.has(label)) {
+          groupsMap.set(label, []);
+        }
+        groupsMap.get(label)!.push({
+          id: t.id,
+          name: t.merchant || "Transaksi",
+          merchant: t.merchant,
+          description: t.description,
+          category: t.category || "General",
+          amount: t.amount,
+          taxAmount: t.taxAmount,
+          date: t.date || new Date().toISOString(),
+          dateLabel: t.dateLabel,
+          iconType: (t.category?.toLowerCase().includes("cloth") ? "clothing" :
+                    t.category?.toLowerCase().includes("gadget") || t.category?.toLowerCase().includes("phone") ? "electronics" :
+                    t.category?.toLowerCase().includes("trans") ? "transport" : "food") as any,
+          type: t.type,
+        });
+      }
+      return Array.from(groupsMap.entries()).map(([dateLabel, items]) => ({
+        dateLabel,
+        items,
+      }));
+    }
+    return mockGroupedData;
+  })();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -106,16 +167,19 @@ export const HomeScreen = ({
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={loadData} colors={[colors.coral]} tintColor={colors.coral} />
+        }
       >
         {/* Header from Screenshot */}
         <Header
           greeting="Hello,"
-          userName="Priscilla"
+          userName={dashboard?.user?.name || "Priscilla"}
           onSearchPress={onSearchPress}
         />
 
         {/* Hero Plum Card with Rising Animated Bars */}
-        <HeroOutcomeCard amount="$12,560.00" />
+        <HeroOutcomeCard amount={totalExpenseFormatted} chartData={chartData} />
 
         {/* Section Header with Card vs Table Switcher */}
         <View style={styles.sectionTop}>
@@ -125,7 +189,7 @@ export const HomeScreen = ({
 
         {/* Transactions List: Card View vs Table View */}
         <View style={styles.transactionsWrapper}>
-          {mockGroupedData.map((group, groupIndex) => (
+          {displayedGroups.map((group, groupIndex) => (
             <View key={groupIndex} style={styles.groupSection}>
               <Text style={styles.groupHeader}>{group.dateLabel}</Text>
 

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
 import { ChevronLeft, PieChart, CheckCircle2, AlertTriangle, XCircle } from "lucide-react-native";
 import { colors } from "../theme/colors";
 
+import { api } from "../services/api";
+
 interface BudgetsScreenProps {
   onBack: () => void;
 }
@@ -19,14 +21,24 @@ export const BudgetsScreen = ({ onBack }: BudgetsScreenProps) => {
   const [needsPct, setNeedsPct] = useState(50);
   const [wantsPct, setWantsPct] = useState(30);
   const [savingsPct, setSavingsPct] = useState(20);
-
-  const budgetItems = [
+  const [items, setItems] = useState([
     { name: "Makanan & Minuman", limit: 3000, spent: 1850, pct: 62, status: "safe" },
     { name: "Tempat Tinggal", limit: 2500, spent: 2500, pct: 100, status: "exceeded" },
     { name: "Transportasi", limit: 1200, spent: 1050, pct: 88, status: "warning" },
     { name: "Tagihan & Utilitas", limit: 1000, spent: 750, pct: 75, status: "safe" },
     { name: "Belanja & Keinginan", limit: 1500, spent: 1200, pct: 80, status: "warning" },
-  ];
+  ]);
+
+  useEffect(() => {
+    (async () => {
+      const data = await api.getBudgets();
+      if (data && data.length > 0) {
+        setItems(data);
+      }
+    })();
+  }, []);
+
+  const budgetItems = items;
 
   return (
     <SafeAreaView style={styles.safeArea}>

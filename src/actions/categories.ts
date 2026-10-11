@@ -70,3 +70,38 @@ export async function deleteCategoryAction(id: string) {
   revalidatePath("/", "layout");
   return { success: true };
 }
+
+export async function updateCategoryAction(data: {
+  id: string;
+  name: string;
+  type?: "income" | "expense";
+  color?: string;
+  icon?: string;
+}) {
+  const user = await requireAuthUser();
+
+  if (!data.id || !data.name?.trim()) {
+    return { success: false, error: "ID dan nama kategori wajib diisi." };
+  }
+
+  const existing = await prisma.category.findUnique({
+    where: { id: data.id },
+  });
+
+  if (!existing) {
+    return { success: false, error: "Kategori tidak ditemukan." };
+  }
+
+  const updated = await prisma.category.update({
+    where: { id: data.id },
+    data: {
+      name: data.name.trim(),
+      ...(data.type ? { type: data.type } : {}),
+      ...(data.color ? { color: data.color } : {}),
+      ...(data.icon ? { icon: data.icon } : {}),
+    },
+  });
+
+  revalidatePath("/", "layout");
+  return { success: true, category: updated };
+}

@@ -11,6 +11,8 @@ import {
   StatusBar,
   RefreshControl,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -24,25 +26,36 @@ import {
   Edit2,
   X,
   Check,
+  CreditCard,
 } from "lucide-react-native";
 import { colors } from "../theme/colors";
 import { api } from "../services/api";
 import { FadeInView, ScalePress } from "../components/AnimatedComponents";
+import { ViewModeToggle, ViewMode } from "../components/ViewModeToggle";
 
 interface AccountsScreenProps {
   onBack: () => void;
 }
+
+const ACCOUNT_TYPES = [
+  { key: "bank", label: "Rekening Bank", icon: Building2, desc: "BCA, Mandiri, BRI, BNI, Bank Digital" },
+  { key: "cash", label: "Uang Tunai (Cash)", icon: Wallet, desc: "Dompet fisik, Kas kecil, Uang tunai" },
+  { key: "ewallet", label: "E-Wallet", icon: Smartphone, desc: "GoPay, OVO, DANA, ShopeePay" },
+  { key: "savings", label: "Tabungan & Investasi", icon: PiggyBank, desc: "Deposito, Reksa Dana, Saham, Emas" },
+  { key: "credit_card", label: "Kartu Kredit", icon: CreditCard, desc: "Limit & transaksi kartu kredit" },
+];
 
 export const AccountsScreen = ({ onBack }: AccountsScreenProps) => {
   const [accountList, setAccountList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("card");
 
   // Form states
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
-  const [formType, setFormType] = useState<"bank" | "cash" | "ewallet" | "savings">("bank");
+  const [formType, setFormType] = useState<string>("bank");
   const [formBalance, setFormBalance] = useState("");
 
   const fetchAccounts = async () => {
@@ -72,7 +85,12 @@ export const AccountsScreen = ({ onBack }: AccountsScreenProps) => {
   const openEditModal = (acc: any) => {
     setEditingId(acc.id);
     setFormName(acc.name || "");
-    setFormType((acc.accountType || acc.type || "bank").toLowerCase());
+    const raw = (acc.accountType || acc.type || "bank").toLowerCase();
+    setFormType(
+      raw === "bank" || raw === "cash" || raw === "ewallet" || raw === "savings" || raw === "credit_card"
+        ? raw
+        : "bank"
+    );
     setFormBalance(acc.openingBalance ? acc.openingBalance.toString() : (acc.balance ? acc.balance.toString() : "0"));
     setModalVisible(true);
   };
@@ -187,7 +205,9 @@ export const AccountsScreen = ({ onBack }: AccountsScreenProps) => {
           <ChevronLeft size={22} color={colors.textPrimary} />
         </ScalePress>
         <Text style={styles.headerTitle}>Akun & Dompet (Wallets)</Text>
-        <View style={{ width: 40 }} />
+        <ScalePress style={styles.headerAddBtn} onPress={openAddModal}>
+          <Plus size={20} color="#FFFFFF" strokeWidth={3} />
+        </ScalePress>
       </View>
 
       <ScrollView
@@ -210,36 +230,41 @@ export const AccountsScreen = ({ onBack }: AccountsScreenProps) => {
           </View>
         </FadeInView>
 
+        {/* Section Header with ViewModeToggle and Add Button */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Daftar Sumber Dana ({accounts.length})</Text>
-          <ScalePress style={styles.addBtn} onPress={openAddModal}>
-            <Plus size={16} color="#FFFFFF" strokeWidth={3} />
-            <Text style={styles.addBtnText}>Tambah Akun</Text>
-          </ScalePress>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+            <ScalePress style={styles.addBtn} onPress={openAddModal}>
+              <Plus size={14} color="#FFFFFF" strokeWidth={3} />
+              <Text style={styles.addBtnText}>Tambah</Text>
+            </ScalePress>
+          </View>
         </View>
 
-        <View style={styles.accountList}>
-          {accounts.length === 0 && !loading ? (
-            <FadeInView delay={100}>
-              <View style={{ padding: 24, alignItems: "center" }}>
-                <Text style={{ color: colors.textMuted }}>Belum ada akun terdaftar.</Text>
-              </View>
-            </FadeInView>
-          ) : (
-            accounts.map((acc, idx) => (
+        {accounts.length === 0 && !loading ? (
+          <FadeInView delay={100}>
+            <View style={styles.emptyContainer}>
+              <Wallet size={36} color={colors.textMuted} />
+              <Text style={styles.emptyText}>Belum ada akun terdaftar.</Text>
+            </View>
+          </FadeInView>
+        ) : viewMode === "card" ? (
+          <View style={styles.accountList}>
+            {accounts.map((acc, idx) => (
               <FadeInView key={`${acc.id || idx}`} delay={idx * 50}>
                 <View style={styles.accountCard}>
                   <View style={styles.accountLeft}>
                     <View style={[styles.iconBox, { backgroundColor: acc.bg }]}>
                       {acc.icon}
                     </View>
-                    <View style={{ maxWidth: 140 }}>
-                      <Text style={styles.accountName} numberOfLines={1}>{acc.name}</Text>
+                    <View style={styles.accountInfoCol}>
+                      <Text style={styles.accountName}>{acc.name}</Text>
                       <Text style={styles.accountType}>
                         {acc.type === "bank"
                           ? "Rekening Bank"
                           : acc.type === "ewallet"
-                          ? "E-Wallet"
+                          ? "Dompet Digital (E-Wallet)"
                           : acc.type === "savings"
                           ? "Tabungan / Investasi"
                           : "Uang Tunai"}
@@ -268,9 +293,71 @@ export const AccountsScreen = ({ onBack }: AccountsScreenProps) => {
                   </View>
                 </View>
               </FadeInView>
-            ))
-          )}
-        </View>
+            ))}
+          </View>
+        ) : (
+          /* Table View Mode */
+          <FadeInView delay={50}>
+            <View style={styles.tableCard}>
+              <View style={styles.tableHeaderRow}>
+                <Text style={[styles.tableHeaderCell, { flex: 2.2 }]}>Nama Sumber</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Jenis</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 2, textAlign: "right" }]}>Saldo</Text>
+                <Text style={[styles.tableHeaderCell, { width: 68, textAlign: "center" }]}>Aksi</Text>
+              </View>
+
+              {accounts.map((acc, idx) => (
+                <View
+                  key={`tbl-${acc.id || idx}`}
+                  style={[
+                    styles.tableRow,
+                    idx % 2 === 1 ? styles.tableRowZebra : null,
+                  ]}
+                >
+                  <View style={[styles.tableCellWrap, { flex: 2.2 }]}>
+                    <View style={[styles.tableIconBox, { backgroundColor: acc.bg }]}>
+                      {acc.icon}
+                    </View>
+                    <Text style={styles.tableNameText} numberOfLines={2}>
+                      {acc.name}
+                    </Text>
+                  </View>
+
+                  <View style={{ flex: 1.5 }}>
+                    <Text style={styles.tableTypeText}>
+                      {acc.type === "bank"
+                        ? "Bank"
+                        : acc.type === "ewallet"
+                        ? "E-Wallet"
+                        : acc.type === "savings"
+                        ? "Tabungan"
+                        : "Tunai"}
+                    </Text>
+                  </View>
+
+                  <Text style={[styles.tableBalanceText, { flex: 2, textAlign: "right" }]}>
+                    Rp {Number(acc.balance).toLocaleString("id-ID")}
+                  </Text>
+
+                  <View style={styles.tableActions}>
+                    <TouchableOpacity
+                      onPress={() => openEditModal(acc)}
+                      style={styles.tableActionBtn}
+                    >
+                      <Edit2 size={13} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDelete(acc)}
+                      style={[styles.tableActionBtn, { marginLeft: 4 }]}
+                    >
+                      <Trash2 size={13} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </FadeInView>
+        )}
       </ScrollView>
 
       {/* Modal Add / Edit Account */}
@@ -280,84 +367,101 @@ export const AccountsScreen = ({ onBack }: AccountsScreenProps) => {
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {editingId ? "Ubah Akun / Dompet" : "Tambah Akun Baru"}
               </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <X size={22} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
-            {/* Input Name */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Nama Akun / Dompet</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Contoh: BCA Prioritas, GoPay, Dompet Tunai"
-                placeholderTextColor={colors.textMuted}
-                value={formName}
-                onChangeText={setFormName}
-              />
-            </View>
-
-            {/* Account Type Selector */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Jenis Akun</Text>
-              <View style={styles.typeSelectorRow}>
-                {[
-                  { key: "bank", label: "Bank" },
-                  { key: "cash", label: "Tunai" },
-                  { key: "ewallet", label: "E-Wallet" },
-                  { key: "savings", label: "Tabungan" },
-                ].map((item) => {
-                  const active = formType === item.key;
-                  return (
-                    <ScalePress
-                      key={item.key}
-                      style={[styles.typeChip, active ? styles.typeChipActive : null]}
-                      onPress={() => setFormType(item.key as any)}
-                    >
-                      <Text style={[styles.typeChipText, active ? styles.typeChipTextActive : null]}>
-                        {item.label}
-                      </Text>
-                    </ScalePress>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Opening Balance */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Saldo Awal (Rp)</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="0"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="numeric"
-                value={formBalance}
-                onChangeText={setFormBalance}
-              />
-            </View>
-
-            {/* Submit Button */}
-            <ScalePress
-              style={[styles.saveBtn, saving ? { opacity: 0.7 } : null]}
-              onPress={handleSave}
-              disabled={saving}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 540 }}
+              contentContainerStyle={{ paddingBottom: 24 }}
             >
-              {saving ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.saveBtnText}>
-                  {editingId ? "Simpan Perubahan" : "Buat Akun"}
-                </Text>
-              )}
-            </ScalePress>
+              {/* Input Name */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Nama Akun / Dompet</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Contoh: BCA Prioritas, GoPay, Dompet Tunai"
+                  placeholderTextColor={colors.textMuted}
+                  value={formName}
+                  onChangeText={setFormName}
+                />
+              </View>
+
+              {/* Account Type Selector - Full Width Cards */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Pilih Jenis Akun</Text>
+                <View style={styles.typeListContainer}>
+                  {ACCOUNT_TYPES.map((item) => {
+                    const active = formType === item.key;
+                    const IconComp = item.icon;
+                    return (
+                      <TouchableOpacity
+                        key={item.key}
+                        style={[styles.typeListItem, active ? styles.typeListItemActive : null]}
+                        activeOpacity={0.7}
+                        onPress={() => setFormType(item.key)}
+                      >
+                        <View style={[styles.typeIconBox, active ? styles.typeIconBoxActive : null]}>
+                          <IconComp size={20} color={active ? "#FFFFFF" : colors.plum} />
+                        </View>
+                        <View style={styles.typeTextGroup}>
+                          <Text style={[styles.typeItemTitle, active ? styles.typeItemTitleActive : null]}>
+                            {item.label}
+                          </Text>
+                          <Text style={[styles.typeItemDesc, active ? styles.typeItemDescActive : null]}>
+                            {item.desc}
+                          </Text>
+                        </View>
+                        <View style={[styles.radioCircle, active ? styles.radioCircleActive : null]}>
+                          {active && <View style={styles.radioDot} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Opening Balance */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Saldo Awal (Rp)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="0"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="numeric"
+                  value={formBalance}
+                  onChangeText={setFormBalance}
+                />
+              </View>
+
+              {/* Submit Button */}
+              <ScalePress
+                style={[styles.saveBtn, saving ? { opacity: 0.7 } : null]}
+                onPress={handleSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveBtnText}>
+                    {editingId ? "Simpan Perubahan" : "Buat Akun"}
+                  </Text>
+                )}
+              </ScalePress>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -384,6 +488,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerTitle: { fontSize: 17, fontWeight: "800", color: colors.textPrimary },
+  headerAddBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: colors.coral,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: colors.coral,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+  },
   content: { padding: 20 },
   totalCard: {
     backgroundColor: "#FFFFFF",
@@ -412,9 +528,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     backgroundColor: colors.coral,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
   },
   addBtnText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
   accountList: { gap: 12 },
@@ -428,7 +544,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.cardBorder,
   },
-  accountLeft: { flexDirection: "row", alignItems: "center" },
+  accountLeft: { flexDirection: "row", alignItems: "center", flex: 1, marginRight: 10 },
   iconBox: {
     width: 46,
     height: 46,
@@ -437,6 +553,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 14,
   },
+  accountInfoCol: { flex: 1 },
   accountName: { fontSize: 15, fontWeight: "800", color: colors.textPrimary },
   accountType: { fontSize: 12, color: colors.textMuted, fontWeight: "500", marginTop: 2 },
   accountRight: { alignItems: "flex-end" },
@@ -447,6 +564,90 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.slateLight,
   },
+  emptyContainer: {
+    padding: 32,
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    gap: 8,
+  },
+  emptyText: { color: colors.textMuted, fontSize: 14, fontWeight: "600" },
+  // Table Mode Styles
+  tableCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  tableHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  tableHeaderCell: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.textMuted,
+    textTransform: "uppercase",
+  },
+  tableRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  tableRowZebra: {
+    backgroundColor: "#FAFAFC",
+  },
+  tableCellWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  tableIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tableNameText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  tableTypeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.textMuted,
+  },
+  tableBalanceText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.textPrimary,
+  },
+  tableActions: {
+    width: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tableActionBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: colors.slateLight,
+  },
+  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -476,27 +677,75 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
   },
-  typeSelectorRow: {
-    flexDirection: "row",
+  typeListContainer: {
     gap: 8,
+    width: "100%",
   },
-  typeChip: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: colors.slateLight,
+  typeListItem: {
+    width: "100%",
+    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
   },
-  typeChipActive: {
+  typeListItemActive: {
     backgroundColor: colors.plum,
+    borderColor: colors.plum,
   },
-  typeChipText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.textSecondary,
+  typeIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
   },
-  typeChipTextActive: {
+  typeIconBoxActive: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  typeTextGroup: {
+    flex: 1,
+  },
+  typeItemTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.textPrimary,
+  },
+  typeItemTitleActive: {
     color: "#FFFFFF",
+  },
+  typeItemDesc: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  typeItemDescActive: {
+    color: "rgba(255,255,255,0.8)",
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 10,
+  },
+  radioCircleActive: {
+    borderColor: "#FFFFFF",
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#FFFFFF",
   },
   saveBtn: {
     backgroundColor: colors.plum,

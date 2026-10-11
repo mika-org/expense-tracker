@@ -23,6 +23,7 @@ Dokumen ini memetakan seluruh status cakupan fitur (*coverage*) pada platform **
 | | Hapus Kategori (Delete) |  Selesai |  Selesai | Dilengkapi dialog konfirmasi |
 | | Deduplikasi Key Unik |  Selesai |  Selesai | Key compound unik mencegah warning `.$Transportasi` |
 | **Anggaran (Budgets & What-If)** | Monitoring Realisasi & Limit Pos Bulanan |  Selesai |  Selesai | Progress bar & status peringatan (Aman/Mendekati/Melewati) |
+| | CRUD Pos Realisasi Kategori |  Selesai |  Selesai | Tambah, Edit, Hapus batas pos anggaran per kategori (Rp / %) |
 | | Kalkulator Simulasi (What-If) |  Selesai |  Selesai | Model rasio 50/30/20, 60/20/20, 70/20/10 |
 | | Input Kustom Basis Penghasilan Bulanan |  Selesai |  Selesai | Bebas input nominal di TextInput & tombol preset cepat |
 | | Terapkan Simulasi Sebagai Anggaran Aktif |  Selesai |  Selesai | 1-klik simpan alokasi ke database anggaran aktif |

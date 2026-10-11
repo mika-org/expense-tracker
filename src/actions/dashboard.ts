@@ -160,6 +160,60 @@ export async function getDashboardDataAction(period: PeriodFilter = "this_month"
     }
   }
 
+  // 9. Real Multi-Month Expense Trend for Charts (Last 5 Months)
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+  const now = new Date();
+  const last5Months: { key: string; label: string; year: number; month: number; total: number }[] = [];
+
+  for (let i = 4; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mIdx = d.getMonth();
+    const yr = d.getFullYear();
+    last5Months.push({
+      key: `${yr}-${mIdx}`,
+      label: monthNames[mIdx],
+      year: yr,
+      month: mIdx,
+      total: 0,
+    });
+  }
+
+  const fiveMonthsStart = new Date(last5Months[0].year, last5Months[0].month, 1);
+  const multiMonthExpenses = await prisma.transaction.findMany({
+    where: {
+      userId: user.id,
+      deletedAt: null,
+      type: "expense",
+      transactionDate: { gte: fiveMonthsStart },
+    },
+    select: {
+      amount: true,
+      transactionDate: true,
+    },
+  });
+
+  for (const tx of multiMonthExpenses) {
+    const txDate = new Date(tx.transactionDate);
+    const key = `${txDate.getFullYear()}-${txDate.getMonth()}`;
+    const target = last5Months.find((m) => m.key === key);
+    if (target) {
+      target.total += toNum(tx.amount);
+    }
+  }
+
+  const maxMonthExpense = Math.max(...last5Months.map((m) => m.total), 1);
+  const chartData = last5Months.map((m, idx) => ({
+    month: m.label,
+    amount: m.total > 0 ? Math.max(16, Math.round((m.total / maxMonthExpense) * 88)) : 14,
+    rawAmount: m.total,
+    active: idx === last5Months.length - 1,
+  }));
+
+  const monthlyExpenses = last5Months.map((m) => ({
+    month: m.label,
+    amount: m.total,
+  }));
+
   return {
     periodLabel: label,
     summary: {
@@ -178,5 +232,7 @@ export async function getDashboardDataAction(period: PeriodFilter = "this_month"
     cashFlowTimeline,
     recentTransactions,
     insights,
+    chartData,
+    monthlyExpenses,
   };
 }

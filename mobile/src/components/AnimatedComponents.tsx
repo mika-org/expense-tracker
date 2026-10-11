@@ -6,6 +6,7 @@ import {
   TouchableOpacityProps,
   ViewStyle,
   StyleProp,
+  StyleSheet,
 } from "react-native";
 import { ANIMATION_CONFIG, createEntranceAnimation, createScaleSpring } from "../theme/animations";
 
@@ -76,8 +77,11 @@ export const ScalePress: React.FC<ScalePressProps> = ({
     }
   };
 
+  const flattened = StyleSheet.flatten(style) as ViewStyle | undefined;
+  const autoFlex = flattened?.flex !== undefined ? { flex: flattened.flex } : undefined;
+
   return (
-    <Animated.View style={[{ transform: [{ scale }] }, containerStyle]}>
+    <Animated.View style={[{ transform: [{ scale }] }, autoFlex, containerStyle]}>
       <TouchableOpacity
         activeOpacity={0.88}
         onPressIn={handlePressIn}

@@ -53,18 +53,16 @@ export const DetailScreen = ({
 
   // Popover state for comparison chart
   const [selectedChartIdx, setSelectedChartIdx] = useState<number>(4);
-
-  const monthsData = [
-    { month: "Jun", amount: 1250000 },
-    { month: "Jul", amount: 2450000 },
-    { month: "Ags", amount: 1850000 },
-    { month: "Sep", amount: 3100000 },
-    { month: "Okt", amount: 2850000 },
-  ];
+  const [monthsData, setMonthsData] = useState<{ month: string; amount: number }[]>([
+    { month: "Jun", amount: 0 },
+    { month: "Jul", amount: 0 },
+    { month: "Ags", amount: 0 },
+    { month: "Sep", amount: 0 },
+    { month: "Okt", amount: 0 },
+  ]);
 
   // Staggered animated bar heights
-  const barHeights = [35, 60, 48, 78, 88];
-  const barAnims = useRef(barHeights.map(() => new Animated.Value(0))).current;
+  const barAnims = useRef([0, 1, 2, 3, 4].map(() => new Animated.Value(14))).current;
 
   const fetchReceiptData = async () => {
     setLoading(true);
@@ -108,6 +106,25 @@ export const DetailScreen = ({
           setActiveTx(null);
         }
       }
+
+      // 3. Fetch dynamic monthly expense trend from database
+      const dash = await api.getDashboard();
+      if (dash?.monthlyExpenses && dash.monthlyExpenses.length > 0) {
+        setMonthsData(dash.monthlyExpenses);
+        setSelectedChartIdx(dash.monthlyExpenses.length - 1);
+
+        const maxAmt = Math.max(...dash.monthlyExpenses.map((m) => m.amount), 1);
+        const anims = dash.monthlyExpenses.map((m, i) => {
+          const targetHeight = m.amount > 0 ? Math.max(16, Math.round((m.amount / maxAmt) * 88)) : 14;
+          return Animated.timing(barAnims[i], {
+            toValue: targetHeight,
+            duration: 550,
+            delay: 100 + i * 80,
+            useNativeDriver: false,
+          });
+        });
+        Animated.parallel(anims).start();
+      }
     } finally {
       setLoading(false);
     }
@@ -123,18 +140,6 @@ export const DetailScreen = ({
   useEffect(() => {
     fetchReceiptData();
   }, []);
-
-  useEffect(() => {
-    const anims = barHeights.map((h, i) =>
-      Animated.timing(barAnims[i], {
-        toValue: h,
-        duration: 550,
-        delay: 100 + i * 80,
-        useNativeDriver: false,
-      })
-    );
-    Animated.parallel(anims).start();
-  }, [barAnims]);
 
   const handleDeleteTransaction = () => {
     if (!activeTx) return;

@@ -12,6 +12,7 @@ export interface Transaction {
   iconType: "clothing" | "electronics" | "transport" | "food" | "general";
   type: "expense" | "income" | "transfer";
   accountName?: string;
+  accountId?: string;
 }
 
 export interface DateGroupedTransactions {
@@ -22,5 +23,6 @@ export interface DateGroupedTransactions {
 export interface MonthlyChartData {
   month: string;
   amount: number;
+  rawAmount?: number;
   active: boolean;
 }

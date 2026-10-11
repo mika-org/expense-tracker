@@ -1,5 +1,10 @@
 import { getApiUser, apiResponse, handleOptions } from "@/lib/api-auth";
-import { getCategoriesAction, createCategoryAction, deleteCategoryAction } from "@/actions/categories";
+import {
+  getCategoriesAction,
+  createCategoryAction,
+  updateCategoryAction,
+  deleteCategoryAction,
+} from "@/actions/categories";
 import { prisma } from "@/lib/db";
 
 export async function OPTIONS() {
@@ -48,6 +53,21 @@ export async function POST(request: Request) {
     return apiResponse(result, result.success ? 201 : 400);
   } catch (error: any) {
     return apiResponse({ error: error.message || "Failed to create category" }, 500);
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const user = await getApiUser(request);
+    if (!user) {
+      return apiResponse({ error: "Unauthorized" }, 401);
+    }
+
+    const body = await request.json();
+    const result = await updateCategoryAction(body);
+    return apiResponse(result, result.success ? 200 : 400);
+  } catch (error: any) {
+    return apiResponse({ error: error.message || "Failed to update category" }, 500);
   }
 }
 

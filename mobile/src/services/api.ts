@@ -54,7 +54,12 @@ export interface ApiDashboardData {
   chartData?: Array<{
     month: string;
     amount: number;
+    rawAmount?: number;
     active: boolean;
+  }>;
+  monthlyExpenses?: Array<{
+    month: string;
+    amount: number;
   }>;
   cashFlowTimeline?: Array<{
     date: string;
@@ -319,6 +324,44 @@ export const api = {
     }
   },
 
+  async addBudgetItem(payload: { categoryId: string; amountType?: "fixed" | "percentage"; amountValue: number; budgetId?: string }) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE_URL}/budgets`, {
+        method: "POST",
+        body: JSON.stringify({ ...payload, action: "add_item" }),
+      });
+      return await res.json();
+    } catch (err: any) {
+      console.warn("API addBudgetItem failed:", err);
+      return { success: false, error: err.message || "Gagal menambah pos anggaran" };
+    }
+  },
+
+  async updateBudgetItem(payload: { id: string; categoryId?: string; amountType?: "fixed" | "percentage"; amountValue: number }) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE_URL}/budgets`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (err: any) {
+      console.warn("API updateBudgetItem failed:", err);
+      return { success: false, error: err.message || "Gagal memperbarui pos anggaran" };
+    }
+  },
+
+  async deleteBudgetItem(id: string) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE_URL}/budgets?id=${id}`, {
+        method: "DELETE",
+      });
+      return await res.json();
+    } catch (err: any) {
+      console.warn("API deleteBudgetItem failed:", err);
+      return { success: false, error: err.message || "Gagal menghapus pos anggaran" };
+    }
+  },
+
   // 4. Accounts
   async getAccounts() {
     try {
@@ -463,7 +506,7 @@ export const api = {
     }
   },
 
-  async payDebt(payload: { debtId: string; amount: number; accountId?: string; note?: string }) {
+  async payDebt(payload: { debtId: string; amount: number; accountId?: string; note?: string; paymentDate?: string }) {
     try {
       const res = await fetchWithTimeout(`${API_BASE_URL}/debts`, {
         method: "POST",
@@ -511,6 +554,19 @@ export const api = {
     } catch (err: any) {
       console.warn("API createCategory failed:", err);
       return { success: false, error: err.message || "Gagal membuat kategori" };
+    }
+  },
+
+  async updateCategory(payload: { id: string; name: string; type?: "expense" | "income"; icon?: string; color?: string }) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE_URL}/categories`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (err: any) {
+      console.warn("API updateCategory failed:", err);
+      return { success: false, error: err.message || "Gagal memperbarui kategori" };
     }
   },
 

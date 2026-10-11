@@ -23,13 +23,25 @@ import {
   Plus,
   Trash2,
   X,
+  Calendar,
+  History,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react-native";
 import { colors } from "../theme/colors";
 import { api } from "../services/api";
 import { FadeInView, ScalePress } from "../components/AnimatedComponents";
+import { DatePickerModal } from "../components/DatePickerModal";
 
 interface DebtsScreenProps {
   onBack: () => void;
+}
+
+interface DebtPaymentItem {
+  id: string;
+  amount: number;
+  date: string;
+  note?: string | null;
 }
 
 interface DebtItem {
@@ -42,6 +54,7 @@ interface DebtItem {
   dueDate?: string | null;
   status: string;
   note?: string | null;
+  payments?: DebtPaymentItem[];
 }
 
 export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
@@ -49,6 +62,7 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
   const [debtList, setDebtList] = useState<DebtItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
   // Create Modal
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -56,13 +70,18 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
   const [formCounterparty, setFormCounterparty] = useState("");
   const [formAmount, setFormAmount] = useState("");
   const [formDueDate, setFormDueDate] = useState("");
+  const [formDueDateLabel, setFormDueDateLabel] = useState("");
   const [formNote, setFormNote] = useState("");
+  const [createDatePickerVisible, setCreateDatePickerVisible] = useState(false);
 
   // Pay Modal
   const [payModalVisible, setPayModalVisible] = useState(false);
   const [activeDebt, setActiveDebt] = useState<DebtItem | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payNote, setPayNote] = useState("");
+  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
+  const [payDateLabel, setPayDateLabel] = useState("Hari Ini");
+  const [payDatePickerVisible, setPayDatePickerVisible] = useState(false);
 
   const fetchDebts = async () => {
     setLoading(true);
@@ -110,6 +129,7 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
       setFormCounterparty("");
       setFormAmount("");
       setFormDueDate("");
+      setFormDueDateLabel("");
       setFormNote("");
       fetchDebts();
     } catch (e: any) {
@@ -132,6 +152,7 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
       const res = await api.payDebt({
         debtId: activeDebt.id,
         amount,
+        paymentDate: payDate,
         note: payNote.trim() || "Pembayaran angsuran",
       });
 
@@ -178,6 +199,12 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
     );
   };
 
+  const setPayQuickPercent = (pct: number) => {
+    if (!activeDebt) return;
+    const amt = Math.round((activeDebt.remainingAmount * pct) / 100);
+    setPayAmount(amt.toString());
+  };
+
   const filtered = debtList.filter((d) => {
     if (filter === "all") return true;
     return d.type === filter;
@@ -200,7 +227,11 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
         </ScalePress>
         <Text style={styles.headerTitle}>Utang & Piutang</Text>
         <ScalePress
-          onPress={() => setCreateModalVisible(true)}
+          onPress={() => {
+            setFormDueDate("");
+            setFormDueDateLabel("");
+            setCreateModalVisible(true);
+          }}
           style={styles.headerAddBtn}
         >
           <Plus size={20} color="#FFFFFF" strokeWidth={3} />
@@ -262,7 +293,11 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
 
           <ScalePress
             style={styles.addSmallBtn}
-            onPress={() => setCreateModalVisible(true)}
+            onPress={() => {
+              setFormDueDate("");
+              setFormDueDateLabel("");
+              setCreateModalVisible(true);
+            }}
           >
             <Plus size={14} color="#FFFFFF" strokeWidth={3} />
             <Text style={styles.addSmallText}>Catat</Text>
@@ -291,6 +326,13 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
                     year: "numeric",
                   })
                 : "Tanpa Jatuh Tempo";
+
+              const totalInitial = item.initialAmount || 1;
+              const remaining = item.remainingAmount || 0;
+              const paidSoFar = Math.max(0, totalInitial - remaining);
+              const paidPercent = Math.min(100, Math.round((paidSoFar / totalInitial) * 100));
+              const isExpanded = expandedHistoryId === item.id;
+              const paymentCount = item.payments?.length || 0;
 
               return (
                 <FadeInView key={`${item.id || idx}`} delay={idx * 50}>
@@ -328,6 +370,35 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
                     {item.note ? <Text style={styles.noteText}>{item.note}</Text> : null}
                     <Text style={styles.dueDate}>Jatuh Tempo: {formattedDue}</Text>
 
+                    {/* Progress tracking */}
+                    <View style={styles.repaymentProgressWrap}>
+                      <View style={styles.repaymentProgressHeader}>
+                        <Text style={styles.repaymentProgressLabel}>
+                          {isDebt ? "Status Pengembalian" : "Status Penerimaan"}
+                        </Text>
+                        <Text style={styles.repaymentProgressPct}>{paidPercent}%</Text>
+                      </View>
+                      <View style={styles.progressBarTrack}>
+                        <View
+                          style={[
+                            styles.progressBarFill,
+                            {
+                              width: `${paidPercent}%`,
+                              backgroundColor: isPaid ? "#10B981" : isDebt ? colors.coral : "#3B82F6",
+                            },
+                          ]}
+                        />
+                      </View>
+                      <View style={styles.repaymentProgressFooter}>
+                        <Text style={styles.repaymentPaidText}>
+                          Sudah: Rp {paidSoFar.toLocaleString("id-ID")}
+                        </Text>
+                        <Text style={styles.repaymentRemainText}>
+                          Sisa: Rp {remaining.toLocaleString("id-ID")}
+                        </Text>
+                      </View>
+                    </View>
+
                     <View style={styles.amountsRow}>
                       <View>
                         <Text style={styles.amtLabel}>Sisa Nominal</Text>
@@ -341,20 +412,73 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
                       </View>
                     </View>
 
-                    {!isPaid && (
-                      <ScalePress
-                        style={styles.payBtn}
-                        onPress={() => {
-                          setActiveDebt(item);
-                          setPayAmount(item.remainingAmount.toString());
-                          setPayNote("");
-                          setPayModalVisible(true);
-                        }}
+                    {/* Action buttons: Pay installment & Toggle History */}
+                    <View style={styles.cardActionsRow}>
+                      <TouchableOpacity
+                        style={styles.historyToggleBtn}
+                        onPress={() => setExpandedHistoryId(isExpanded ? null : item.id)}
                       >
-                        <Text style={styles.payBtnText}>
-                          {isDebt ? "Bayar Angsuran / Lunasi" : "Terima Pembayaran / Lunasi"}
+                        <History size={14} color={colors.textSecondary} />
+                        <Text style={styles.historyToggleText}>
+                          Riwayat Pembayaran ({paymentCount})
                         </Text>
-                      </ScalePress>
+                        {isExpanded ? (
+                          <ChevronUp size={14} color={colors.textSecondary} />
+                        ) : (
+                          <ChevronDown size={14} color={colors.textSecondary} />
+                        )}
+                      </TouchableOpacity>
+
+                      {!isPaid && (
+                        <ScalePress
+                          style={styles.payBtn}
+                          onPress={() => {
+                            setActiveDebt(item);
+                            setPayAmount(item.remainingAmount.toString());
+                            setPayNote("");
+                            setPayDate(new Date().toISOString().split("T")[0]);
+                            setPayDateLabel("Hari Ini");
+                            setPayModalVisible(true);
+                          }}
+                        >
+                          <Text style={styles.payBtnText}>
+                            {isDebt ? "Bayar Angsuran" : "Terima Pembayaran"}
+                          </Text>
+                        </ScalePress>
+                      )}
+                    </View>
+
+                    {/* Expandable Payment History Log */}
+                    {isExpanded && (
+                      <View style={styles.historyBox}>
+                        <Text style={styles.historyBoxTitle}>Catatan Riwayat Cicilan / Pengembalian</Text>
+                        {item.payments && item.payments.length > 0 ? (
+                          item.payments.map((p, pIdx) => (
+                            <View key={p.id || pIdx} style={styles.historyItem}>
+                              <View style={styles.historyItemLeft}>
+                                <View style={styles.historyBullet} />
+                                <View>
+                                  <Text style={styles.historyDate}>
+                                    {new Date(p.date).toLocaleDateString("id-ID", {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric",
+                                    })}
+                                  </Text>
+                                  {p.note ? <Text style={styles.historyNote}>{p.note}</Text> : null}
+                                </View>
+                              </View>
+                              <Text style={styles.historyAmount}>
+                                +Rp {Number(p.amount).toLocaleString("id-ID")}
+                              </Text>
+                            </View>
+                          ))
+                        ) : (
+                          <Text style={styles.historyEmptyText}>
+                            Belum ada riwayat pembayaran tercatat untuk item ini.
+                          </Text>
+                        )}
+                      </View>
                     )}
                   </View>
                 </FadeInView>
@@ -428,15 +552,23 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
               />
             </View>
 
+            {/* DatePicker for Jatuh Tempo */}
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Jatuh Tempo (Opsional: YYYY-MM-DD)</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="2026-12-31"
-                placeholderTextColor={colors.textMuted}
-                value={formDueDate}
-                onChangeText={setFormDueDate}
-              />
+              <Text style={styles.formLabel}>Jatuh Tempo (Pilih Tanggal)</Text>
+              <TouchableOpacity
+                style={styles.datePickerTrigger}
+                onPress={() => setCreateDatePickerVisible(true)}
+              >
+                <Calendar size={18} color={colors.coral} />
+                <Text
+                  style={[
+                    styles.datePickerTriggerText,
+                    formDueDate ? { color: colors.textPrimary } : null,
+                  ]}
+                >
+                  {formDueDateLabel || "Pilih Tanggal Jatuh Tempo"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.formGroup}>
@@ -465,7 +597,7 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
         </View>
       </Modal>
 
-      {/* Modal Pembayaran Utang/Piutang */}
+      {/* Modal Pembayaran / Cicilan Utang/Piutang */}
       <Modal
         visible={payModalVisible}
         transparent
@@ -484,15 +616,42 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
             </View>
 
             {activeDebt && (
-              <View style={{ marginBottom: 14 }}>
-                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.textPrimary }}>
-                  Pihak: {activeDebt.counterparty}
-                </Text>
-                <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
-                  Sisa tagihan: Rp {activeDebt.remainingAmount.toLocaleString("id-ID")}
-                </Text>
+              <View style={styles.payTargetCard}>
+                <View>
+                  <Text style={styles.payTargetName}>{activeDebt.counterparty}</Text>
+                  <Text style={styles.payTargetType}>
+                    {activeDebt.type === "debt" ? "Kewajiban Anda" : "Tagihan Anda"}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={styles.payTargetRemLabel}>Sisa Tagihan:</Text>
+                  <Text style={styles.payTargetRemAmount}>
+                    Rp {activeDebt.remainingAmount.toLocaleString("id-ID")}
+                  </Text>
+                </View>
               </View>
             )}
+
+            {/* Quick Percentage Buttons */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Pilihan Cepat Cicilan</Text>
+              <View style={styles.quickPercentRow}>
+                {[
+                  { label: "25%", pct: 25 },
+                  { label: "50%", pct: 50 },
+                  { label: "75%", pct: 75 },
+                  { label: "Lunasi 100%", pct: 100 },
+                ].map((item) => (
+                  <TouchableOpacity
+                    key={item.label}
+                    style={styles.quickPercentChip}
+                    onPress={() => setPayQuickPercent(item.pct)}
+                  >
+                    <Text style={styles.quickPercentChipText}>{item.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>Nominal Pembayaran (Rp)</Text>
@@ -506,11 +665,25 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
               />
             </View>
 
+            {/* DatePicker for Payment Date */}
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Catatan (Opsional)</Text>
+              <Text style={styles.formLabel}>Tanggal Pembayaran</Text>
+              <TouchableOpacity
+                style={styles.datePickerTrigger}
+                onPress={() => setPayDatePickerVisible(true)}
+              >
+                <Calendar size={18} color={colors.coral} />
+                <Text style={[styles.datePickerTriggerText, { color: colors.textPrimary }]}>
+                  {payDateLabel || "Pilih Tanggal Pembayaran"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Catatan Pembayaran (Opsional)</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="Contoh: Pembayaran cicilan 1"
+                placeholder="Contoh: Pembayaran cicilan ke-1"
                 placeholderTextColor={colors.textMuted}
                 value={payNote}
                 onChangeText={setPayNote}
@@ -525,12 +698,35 @@ export const DebtsScreen = ({ onBack }: DebtsScreenProps) => {
               {saving ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.saveBtnText}>Konfirmasi Pembayaran</Text>
+                <Text style={styles.saveBtnText}>Catat Pembayaran Sekarang</Text>
               )}
             </ScalePress>
           </View>
         </View>
       </Modal>
+
+      {/* Reusable DatePickerModals */}
+      <DatePickerModal
+        visible={createDatePickerVisible}
+        title="Pilih Jatuh Tempo"
+        initialDate={formDueDate || null}
+        onClose={() => setCreateDatePickerVisible(false)}
+        onSelectDate={(dateStr, label) => {
+          setFormDueDate(dateStr);
+          setFormDueDateLabel(label);
+        }}
+      />
+
+      <DatePickerModal
+        visible={payDatePickerVisible}
+        title="Pilih Tanggal Pembayaran"
+        initialDate={payDate || null}
+        onClose={() => setPayDatePickerVisible(false)}
+        onSelectDate={(dateStr, label) => {
+          setPayDate(dateStr);
+          setPayDateLabel(label);
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -653,22 +849,214 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    marginTop: 14,
-    paddingTop: 12,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
   },
   amtLabel: { fontSize: 11, color: colors.textMuted, fontWeight: "600" },
   amtRemaining: { fontSize: 17, fontWeight: "900", marginTop: 2 },
   amtInitial: { fontSize: 13, color: colors.textSecondary, fontWeight: "700", marginTop: 2 },
-  payBtn: {
+  repaymentProgressWrap: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 12,
     marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  repaymentProgressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  repaymentProgressLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.textSecondary,
+  },
+  repaymentProgressPct: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: colors.textPrimary,
+  },
+  progressBarTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#E2E8F0",
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  repaymentProgressFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  repaymentPaidText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#10B981",
+  },
+  repaymentRemainText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.textMuted,
+  },
+  cardActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+  },
+  historyToggleBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     backgroundColor: colors.slateLight,
+  },
+  historyToggleText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.textSecondary,
+  },
+  payBtn: {
+    flex: 1,
+    backgroundColor: colors.plum,
     paddingVertical: 10,
     borderRadius: 14,
     alignItems: "center",
   },
-  payBtnText: { fontSize: 13, fontWeight: "800", color: colors.plum },
+  payBtnText: { fontSize: 12, fontWeight: "800", color: "#FFFFFF" },
+  historyBox: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  historyBoxTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.textPrimary,
+    marginBottom: 10,
+  },
+  historyItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EDF2F7",
+  },
+  historyItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  historyBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981",
+  },
+  historyDate: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  historyNote: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: colors.textMuted,
+    marginTop: 1,
+  },
+  historyAmount: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#10B981",
+  },
+  historyEmptyText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontStyle: "italic",
+    textAlign: "center",
+    paddingVertical: 8,
+  },
+  datePickerTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.slateLight,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  datePickerTriggerText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textMuted,
+  },
+  payTargetCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  payTargetName: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.textPrimary,
+  },
+  payTargetType: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  payTargetRemLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: "600",
+  },
+  payTargetRemAmount: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: colors.coral,
+    marginTop: 1,
+  },
+  quickPercentRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  quickPercentChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: colors.slateLight,
+    alignItems: "center",
+  },
+  quickPercentChipText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.plum,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -688,7 +1076,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: { fontSize: 18, fontWeight: "800", color: colors.textPrimary },
-  formGroup: { marginBottom: 16 },
+  formGroup: { marginBottom: 14 },
   formLabel: { fontSize: 13, fontWeight: "700", color: colors.textPrimary, marginBottom: 8 },
   textInput: {
     backgroundColor: colors.slateLight,

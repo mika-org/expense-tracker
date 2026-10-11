@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ChevronLeft, Layers, Plus, Trash2, X } from "lucide-react-native";
+import { ChevronLeft, Layers, Plus, Trash2, Edit2, X } from "lucide-react-native";
 import { colors } from "../theme/colors";
 import { api } from "../services/api";
 import { FadeInView, ScalePress } from "../components/AnimatedComponents";
@@ -47,8 +47,9 @@ export const CategoriesScreen = ({ onBack }: CategoriesScreenProps) => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Add Category Modal
+  // Add / Edit Category Modal
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
   const [catName, setCatName] = useState("");
   const [catType, setCatType] = useState<"expense" | "income">("expense");
   const [catColor, setCatColor] = useState(colors.coral);
@@ -69,7 +70,23 @@ export const CategoriesScreen = ({ onBack }: CategoriesScreenProps) => {
     fetchCategories();
   }, []);
 
-  const handleCreateCategory = async () => {
+  const openCreateModal = () => {
+    setEditingCategory(null);
+    setCatType(tab);
+    setCatColor(tab === "expense" ? colors.coral : colors.incomeGreen);
+    setCatName("");
+    setModalVisible(true);
+  };
+
+  const openEditModal = (cat: CategoryItem) => {
+    setEditingCategory(cat);
+    setCatName(cat.name || "");
+    setCatType(cat.type === "income" ? "income" : "expense");
+    setCatColor(cat.color || colors.coral);
+    setModalVisible(true);
+  };
+
+  const handleSaveCategory = async () => {
     if (!catName.trim()) {
       Alert.alert("Perhatian", "Nama kategori wajib diisi.");
       return;
@@ -77,22 +94,37 @@ export const CategoriesScreen = ({ onBack }: CategoriesScreenProps) => {
 
     setSaving(true);
     try {
-      const res = await api.createCategory({
-        name: catName.trim(),
-        type: catType,
-        color: catColor,
-      });
+      if (editingCategory) {
+        const res = await api.updateCategory({
+          id: editingCategory.id,
+          name: catName.trim(),
+          type: catType,
+          color: catColor,
+        });
 
-      if (res.success === false) {
-        Alert.alert("Gagal", res.error || "Gagal membuat kategori");
-        return;
+        if (res.success === false) {
+          Alert.alert("Gagal", res.error || "Gagal memperbarui kategori");
+          return;
+        }
+      } else {
+        const res = await api.createCategory({
+          name: catName.trim(),
+          type: catType,
+          color: catColor,
+        });
+
+        if (res.success === false) {
+          Alert.alert("Gagal", res.error || "Gagal membuat kategori");
+          return;
+        }
       }
 
       setModalVisible(false);
       setCatName("");
+      setEditingCategory(null);
       fetchCategories();
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Gagal membuat kategori");
+      Alert.alert("Error", e.message || "Gagal menyimpan kategori");
     } finally {
       setSaving(false);
     }
@@ -137,15 +169,7 @@ export const CategoriesScreen = ({ onBack }: CategoriesScreenProps) => {
           <ChevronLeft size={22} color={colors.textPrimary} />
         </ScalePress>
         <Text style={styles.headerTitle}>Kategori Transaksi</Text>
-        <ScalePress
-          onPress={() => {
-            setCatType(tab);
-            setCatColor(tab === "expense" ? colors.coral : colors.incomeGreen);
-            setCatName("");
-            setModalVisible(true);
-          }}
-          style={styles.headerAddBtn}
-        >
+        <ScalePress onPress={openCreateModal} style={styles.headerAddBtn}>
           <Plus size={20} color="#FFFFFF" strokeWidth={3} />
         </ScalePress>
       </View>
@@ -198,12 +222,20 @@ export const CategoriesScreen = ({ onBack }: CategoriesScreenProps) => {
                     <View style={[styles.colorDot, { backgroundColor: c.color || (tab === "expense" ? colors.coral : colors.incomeGreen) }]} />
                     <Text style={styles.catName} numberOfLines={1}>{c.name}</Text>
                   </View>
-                  <ScalePress
-                    onPress={() => handleDeleteCategory(c)}
-                    style={styles.deleteBtn}
-                  >
-                    <Trash2 size={14} color="#EF4444" />
-                  </ScalePress>
+                  <View style={styles.actionsWrap}>
+                    <ScalePress
+                      onPress={() => openEditModal(c)}
+                      style={styles.editBtn}
+                    >
+                      <Edit2 size={14} color="#3B82F6" />
+                    </ScalePress>
+                    <ScalePress
+                      onPress={() => handleDeleteCategory(c)}
+                      style={styles.deleteBtn}
+                    >
+                      <Trash2 size={14} color="#EF4444" />
+                    </ScalePress>
+                  </View>
                 </View>
               </FadeInView>
             ))}
@@ -211,7 +243,7 @@ export const CategoriesScreen = ({ onBack }: CategoriesScreenProps) => {
         )}
       </ScrollView>
 
-      {/* Modal Tambah Kategori */}
+      {/* Modal Tambah / Edit Kategori */}
       <Modal
         visible={modalVisible}
         transparent
@@ -221,7 +253,9 @@ export const CategoriesScreen = ({ onBack }: CategoriesScreenProps) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Tambah Kategori Baru</Text>
+              <Text style={styles.modalTitle}>
+                {editingCategory ? "Ubah Kategori" : "Tambah Kategori Baru"}
+              </Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <X size={22} color={colors.textMuted} />
               </TouchableOpacity>
@@ -285,13 +319,15 @@ export const CategoriesScreen = ({ onBack }: CategoriesScreenProps) => {
 
             <ScalePress
               style={[styles.saveBtn, saving ? { opacity: 0.7 } : null]}
-              onPress={handleCreateCategory}
+              onPress={handleSaveCategory}
               disabled={saving}
             >
               {saving ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.saveBtnText}>Simpan Kategori</Text>
+                <Text style={styles.saveBtnText}>
+                  {editingCategory ? "Simpan Perubahan" : "Simpan Kategori"}
+                </Text>
               )}
             </ScalePress>
           </View>
@@ -393,10 +429,20 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     flex: 1,
   },
+  actionsWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  editBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+  },
   deleteBtn: {
     padding: 6,
     borderRadius: 8,
-    backgroundColor: colors.slateLight,
+    backgroundColor: "#FFF1F2",
   },
   modalOverlay: {
     flex: 1,

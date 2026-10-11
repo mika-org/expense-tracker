@@ -8,13 +8,17 @@ interface HeroOutcomeCardProps {
   chartData?: MonthlyChartData[];
 }
 
-const defaultChartData: MonthlyChartData[] = [
-  { month: "Jun", amount: 20, active: false },
-  { month: "Jul", amount: 35, active: false },
-  { month: "Ags", amount: 45, active: false },
-  { month: "Sep", amount: 30, active: false },
-  { month: "Okt", amount: 50, active: true },
-];
+const now = new Date();
+const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+const defaultChartData: MonthlyChartData[] = [4, 3, 2, 1, 0].map((offset, idx) => {
+  const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+  return {
+    month: monthNames[d.getMonth()],
+    amount: 14,
+    rawAmount: 0,
+    active: idx === 4,
+  };
+});
 
 export const HeroOutcomeCard = ({
   amount = "Rp 0",
@@ -99,6 +103,11 @@ export const HeroOutcomeCard = ({
   });
 
   const selectedItem = selectedIdx !== null ? chartData[selectedIdx] : null;
+  const popoverDisplayAmount = selectedItem
+    ? selectedItem.rawAmount !== undefined
+      ? `Rp ${Number(selectedItem.rawAmount).toLocaleString("id-ID")}`
+      : `Rp ${Number(selectedItem.amount).toLocaleString("id-ID")}`
+    : "Rp 0";
 
   return (
     <Animated.View
@@ -130,9 +139,7 @@ export const HeroOutcomeCard = ({
         {selectedItem && (
           <Animated.View style={[styles.popoverBox, { opacity: popoverOpacity }]}>
             <Text style={styles.popoverMonth}>{selectedItem.month}</Text>
-            <Text style={styles.popoverAmount}>
-              Rp {(selectedItem.amount * 50000).toLocaleString("id-ID")}
-            </Text>
+            <Text style={styles.popoverAmount}>{popoverDisplayAmount}</Text>
           </Animated.View>
         )}
       </View>

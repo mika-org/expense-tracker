@@ -13,7 +13,7 @@ export async function getDebtsAction() {
     include: {
       payments: {
         orderBy: { paymentDate: "desc" },
-        take: 5,
+        take: 50,
       },
     },
     orderBy: { createdAt: "desc" },
@@ -42,7 +42,7 @@ export async function createDebtAction(data: {
   type: "debt" | "receivable";
   counterparty: string;
   initialAmount: number;
-  startDate: string;
+  startDate?: string;
   dueDate?: string;
   note?: string;
 }) {
@@ -75,6 +75,7 @@ export async function payDebtAction(data: {
   amount: number;
   accountId?: string;
   note?: string;
+  paymentDate?: string;
 }) {
   const user = await requireAuthUser();
 
@@ -92,6 +93,7 @@ export async function payDebtAction(data: {
 
   const remaining = Math.max(0, toNum(debt.remainingAmount) - data.amount);
   const status = remaining <= 0 ? "paid" : "active";
+  const payDate = data.paymentDate ? new Date(data.paymentDate) : new Date();
 
   await prisma.$transaction([
     prisma.debtPayment.create({
@@ -101,6 +103,7 @@ export async function payDebtAction(data: {
         amount: data.amount,
         principalAmount: data.amount,
         interestAmount: 0,
+        paymentDate: payDate,
         accountId: data.accountId || null,
         note: data.note || "Pembayaran cicilan",
       },

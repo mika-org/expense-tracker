@@ -177,3 +177,146 @@ export async function simulateBudgetAction(
     };
   });
 }
+
+export async function addBudgetItemAction(data: {
+  budgetId?: string;
+  categoryId: string;
+  amountType?: "percentage" | "fixed";
+  amountValue: number;
+}) {
+  const user = await requireAuthUser();
+
+  if (!data.categoryId) {
+    return { success: false, error: "Kategori wajib dipilih." };
+  }
+  if (!data.amountValue || data.amountValue <= 0) {
+    return { success: false, error: "Batas anggaran harus lebih besar dari 0." };
+  }
+
+  let budgetId = data.budgetId;
+  if (!budgetId) {
+    const now = new Date();
+    let activeBudget = await prisma.budget.findFirst({
+      where: {
+        userId: user.id,
+        startDate: { lte: now },
+        endDate: { gte: now },
+      },
+    });
+
+    if (!activeBudget) {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+      activeBudget = await prisma.budget.create({
+        data: {
+          userId: user.id,
+          name: `Anggaran ${monthNames[now.getMonth()]} ${now.getFullYear()}`,
+          startDate: startOfMonth,
+          endDate: endOfMonth,
+          allocationMethod: "fixed",
+          incomeBasis: 0,
+        },
+      });
+    }
+    budgetId = activeBudget.id;
+  } else {
+    const exists = await prisma.budget.findFirst({
+      where: { id: budgetId, userId: user.id },
+    });
+    if (!exists) {
+      return { success: false, error: "Anggaran tidak ditemukan." };
+    }
+  }
+
+  const existingItem = await prisma.budgetItem.findUnique({
+    where: {
+      budgetId_categoryId: {
+        budgetId,
+        categoryId: data.categoryId,
+      },
+    },
+  });
+
+  let item;
+  if (existingItem) {
+    item = await prisma.budgetItem.update({
+      where: { id: existingItem.id },
+      data: {
+        amountType: data.amountType || "fixed",
+        amountValue: data.amountValue,
+      },
+      include: { category: true },
+    });
+  } else {
+    item = await prisma.budgetItem.create({
+      data: {
+        budgetId,
+        categoryId: data.categoryId,
+        amountType: data.amountType || "fixed",
+        amountValue: data.amountValue,
+      },
+      include: { category: true },
+    });
+  }
+
+  revalidatePath("/", "layout");
+  return { success: true, item };
+}
+
+export async function updateBudgetItemAction(
+  id: string,
+  data: {
+    categoryId?: string;
+    amountType?: "percentage" | "fixed";
+    amountValue: number;
+  }
+) {
+  const user = await requireAuthUser();
+
+  const item = await prisma.budgetItem.findUnique({
+    where: { id },
+    include: { budget: true },
+  });
+
+  if (!item || item.budget.userId !== user.id) {
+    return { success: false, error: "Pos anggaran tidak ditemukan." };
+  }
+
+  if (data.amountValue <= 0) {
+    return { success: false, error: "Batas anggaran harus lebih besar dari 0." };
+  }
+
+  const updated = await prisma.budgetItem.update({
+    where: { id },
+    data: {
+      ...(data.categoryId ? { categoryId: data.categoryId } : {}),
+      ...(data.amountType ? { amountType: data.amountType } : {}),
+      amountValue: data.amountValue,
+    },
+    include: { category: true },
+  });
+
+  revalidatePath("/", "layout");
+  return { success: true, item: updated };
+}
+
+export async function deleteBudgetItemAction(id: string) {
+  const user = await requireAuthUser();
+
+  const item = await prisma.budgetItem.findUnique({
+    where: { id },
+    include: { budget: true },
+  });
+
+  if (!item || item.budget.userId !== user.id) {
+    return { success: false, error: "Pos anggaran tidak ditemukan." };
+  }
+
+  await prisma.budgetItem.delete({
+    where: { id },
+  });
+
+  revalidatePath("/", "layout");
+  return { success: true };
+}

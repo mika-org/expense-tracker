@@ -10,9 +10,22 @@ import {
   StyleSheet,
   StatusBar,
   RefreshControl,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ChevronLeft, PieChart, CheckCircle2, AlertTriangle, XCircle, Calculator, Sparkles } from "lucide-react-native";
+import {
+  ChevronLeft,
+  PieChart,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Calculator,
+  Sparkles,
+  Plus,
+  Edit2,
+  Trash2,
+  X,
+} from "lucide-react-native";
 import { colors } from "../theme/colors";
 import { api } from "../services/api";
 import { FadeInView, ScalePress, AnimatedProgressBar } from "../components/AnimatedComponents";
@@ -23,10 +36,14 @@ interface BudgetsScreenProps {
 
 interface BudgetItem {
   id?: string;
+  categoryId?: string;
   categoryName?: string;
+  categoryColor?: string;
   name?: string;
   limit: number;
   spent: number;
+  amountType?: "percentage" | "fixed" | string;
+  amountValue?: number;
   percentage?: number;
   pct?: number;
   status: "safe" | "warning" | "exceeded" | string;
@@ -47,6 +64,7 @@ interface BudgetData {
 export const BudgetsScreen = ({ onBack }: BudgetsScreenProps) => {
   const [budget, setBudget] = useState<BudgetData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
 
   // Simulation states
   const [incomeBasis, setIncomeBasis] = useState<number>(10000000);
@@ -56,6 +74,29 @@ export const BudgetsScreen = ({ onBack }: BudgetsScreenProps) => {
   const [savingsPct, setSavingsPct] = useState(20);
 
   const [savingBudget, setSavingBudget] = useState(false);
+
+  // CRUD Item states
+  const [itemModalVisible, setItemModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<BudgetItem | null>(null);
+  const [selectedCatId, setSelectedCatId] = useState("");
+  const [amountType, setAmountType] = useState<"fixed" | "percentage">("fixed");
+  const [amountValue, setAmountValue] = useState("");
+  const [submittingItem, setSubmittingItem] = useState(false);
+
+  const fetchCategories = async () => {
+    try {
+      const data = await api.getCategories();
+      if (Array.isArray(data)) {
+        const expenseOnly = data.filter((c: any) => c.type === "expense");
+        setCategories(expenseOnly);
+        if (expenseOnly.length > 0 && !selectedCatId) {
+          setSelectedCatId(expenseOnly[0].id);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load categories for budget", e);
+    }
+  };
 
   const fetchBudget = async () => {
     setLoading(true);
@@ -126,7 +167,103 @@ export const BudgetsScreen = ({ onBack }: BudgetsScreenProps) => {
 
   useEffect(() => {
     fetchBudget();
+    fetchCategories();
   }, []);
+
+  const handleOpenAddModal = () => {
+    setEditingItem(null);
+    if (categories.length > 0) {
+      setSelectedCatId(categories[0].id);
+    }
+    setAmountType("fixed");
+    setAmountValue("");
+    setItemModalVisible(true);
+  };
+
+  const handleOpenEditModal = (item: BudgetItem) => {
+    setEditingItem(item);
+    setSelectedCatId(item.categoryId || "");
+    setAmountType((item.amountType as any) === "percentage" ? "percentage" : "fixed");
+    setAmountValue(String(item.amountValue ?? item.limit ?? ""));
+    setItemModalVisible(true);
+  };
+
+  const handleSaveBudgetItem = async () => {
+    if (!selectedCatId) {
+      Alert.alert("Perhatian", "Pilih kategori pengeluaran terlebih dahulu.");
+      return;
+    }
+    const cleanStr = amountValue.replace(/[^0-9.]/g, "");
+    const num = parseFloat(cleanStr);
+    if (isNaN(num) || num <= 0) {
+      Alert.alert("Perhatian", "Masukkan nominal atau persentase batas anggaran yang valid.");
+      return;
+    }
+
+    setSubmittingItem(true);
+    try {
+      if (editingItem?.id) {
+        const res = await api.updateBudgetItem({
+          id: editingItem.id,
+          categoryId: selectedCatId,
+          amountType,
+          amountValue: num,
+        });
+        if (res.success === false) {
+          Alert.alert("Gagal", res.error || "Gagal memperbarui pos anggaran");
+          return;
+        }
+        Alert.alert("Sukses", "Pos anggaran berhasil diperbarui.");
+      } else {
+        const res = await api.addBudgetItem({
+          budgetId: budget?.id,
+          categoryId: selectedCatId,
+          amountType,
+          amountValue: num,
+        });
+        if (res.success === false) {
+          Alert.alert("Gagal", res.error || "Gagal menambahkan pos anggaran");
+          return;
+        }
+        Alert.alert("Sukses", "Pos anggaran baru berhasil ditambahkan.");
+      }
+      setItemModalVisible(false);
+      fetchBudget();
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Gagal memproses pos anggaran");
+    } finally {
+      setSubmittingItem(false);
+    }
+  };
+
+  const handleDeleteBudgetItem = (item: BudgetItem) => {
+    if (!item.id) return;
+    const catName = item.categoryName || item.name || "Kategori";
+    Alert.alert(
+      "Hapus Pos Realisasi",
+      `Apakah Anda yakin ingin menghapus pos anggaran "${catName}"?`,
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await api.deleteBudgetItem(item.id!);
+              if (res.success === false) {
+                Alert.alert("Gagal", res.error || "Gagal menghapus pos anggaran");
+                return;
+              }
+              Alert.alert("Sukses", "Pos anggaran berhasil dihapus.");
+              fetchBudget();
+            } catch (e: any) {
+              Alert.alert("Error", e.message || "Gagal menghapus");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleSelectPreset = (preset: "standard" | "focus" | "conservative") => {
     setSimPreset(preset);
@@ -212,15 +349,34 @@ export const BudgetsScreen = ({ onBack }: BudgetsScreenProps) => {
         </FadeInView>
 
         {/* Categories Progress Breakdown */}
-        <Text style={styles.sectionTitle}>Realisasi Kategori</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Realisasi Kategori</Text>
+          <TouchableOpacity
+            style={styles.addPosBtn}
+            onPress={handleOpenAddModal}
+            activeOpacity={0.8}
+          >
+            <Plus size={14} color="#FFFFFF" />
+            <Text style={styles.addPosBtnText}>Tambah Pos</Text>
+          </TouchableOpacity>
+        </View>
+
         {budgetItems.length === 0 ? (
           <FadeInView delay={100}>
             <View style={styles.emptyCard}>
               <PieChart size={32} color={colors.textMuted} />
               <Text style={styles.emptyTitle}>Belum Ada Kategori Anggaran</Text>
               <Text style={styles.emptySubtitle}>
-                Belum ada target anggaran bulanan yang dibuat di database. Gunakan simulasi di bawah untuk merancang alokasi ideal Anda.
+                Belum ada target anggaran bulanan yang dibuat di database. Tambahkan pos anggaran atau terapkan simulasi alokasi.
               </Text>
+              <TouchableOpacity
+                style={styles.emptyActionBtn}
+                onPress={handleOpenAddModal}
+                activeOpacity={0.8}
+              >
+                <Plus size={14} color="#FFFFFF" />
+                <Text style={styles.emptyActionBtnText}>Tambah Pos Sekarang</Text>
+              </TouchableOpacity>
             </View>
           </FadeInView>
         ) : (
@@ -235,23 +391,54 @@ export const BudgetsScreen = ({ onBack }: BudgetsScreenProps) => {
                 <FadeInView key={item.id || idx} delay={idx * 40}>
                   <View style={styles.budgetItemCard}>
                     <View style={styles.itemHeader}>
-                      <Text style={styles.itemName}>{name}</Text>
-                      {isExceeded ? (
-                        <View style={[styles.badge, { backgroundColor: "#FFF0F2" }]}>
-                          <XCircle size={12} color="#EF4444" />
-                          <Text style={[styles.badgeText, { color: "#EF4444" }]}>Melewati</Text>
-                        </View>
-                      ) : isWarning ? (
-                        <View style={[styles.badge, { backgroundColor: "#FFF7EB" }]}>
-                          <AlertTriangle size={12} color="#F59E0B" />
-                          <Text style={[styles.badgeText, { color: "#F59E0B" }]}>Mendekati</Text>
-                        </View>
-                      ) : (
-                        <View style={[styles.badge, { backgroundColor: "#ECFDF5" }]}>
-                          <CheckCircle2 size={12} color="#10B981" />
-                          <Text style={[styles.badgeText, { color: "#10B981" }]}>Aman</Text>
-                        </View>
-                      )}
+                      <View style={styles.itemTitleGroup}>
+                        {item.categoryColor ? (
+                          <View
+                            style={[
+                              styles.categoryDot,
+                              { backgroundColor: item.categoryColor },
+                            ]}
+                          />
+                        ) : null}
+                        <Text style={styles.itemName} numberOfLines={1}>
+                          {name}
+                        </Text>
+                      </View>
+
+                      <View style={styles.itemActionsGroup}>
+                        {isExceeded ? (
+                          <View style={[styles.badge, { backgroundColor: "#FFF0F2" }]}>
+                            <XCircle size={11} color="#EF4444" />
+                            <Text style={[styles.badgeText, { color: "#EF4444" }]}>Melewati</Text>
+                          </View>
+                        ) : isWarning ? (
+                          <View style={[styles.badge, { backgroundColor: "#FFF7EB" }]}>
+                            <AlertTriangle size={11} color="#F59E0B" />
+                            <Text style={[styles.badgeText, { color: "#F59E0B" }]}>Mendekati</Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.badge, { backgroundColor: "#ECFDF5" }]}>
+                            <CheckCircle2 size={11} color="#10B981" />
+                            <Text style={[styles.badgeText, { color: "#10B981" }]}>Aman</Text>
+                          </View>
+                        )}
+
+                        <TouchableOpacity
+                          style={styles.actionIconBtn}
+                          onPress={() => handleOpenEditModal(item)}
+                          activeOpacity={0.7}
+                        >
+                          <Edit2 size={13} color={colors.textSecondary} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.actionIconBtn, { backgroundColor: "#FEE2E2" }]}
+                          onPress={() => handleDeleteBudgetItem(item)}
+                          activeOpacity={0.7}
+                        >
+                          <Trash2 size={13} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
 
                     <View style={styles.progressTrack}>
@@ -403,6 +590,173 @@ export const BudgetsScreen = ({ onBack }: BudgetsScreenProps) => {
           </ScalePress>
         </View>
       </ScrollView>
+
+      {/* Add / Edit Pos Realisasi Modal */}
+      <Modal
+        visible={itemModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setItemModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {editingItem ? "Edit Pos Realisasi" : "Tambah Pos Realisasi"}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  Tentukan target batas anggaran per kategori belanja
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setItemModalVisible(false)}
+                style={styles.closeBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {/* Kategori Pengeluaran */}
+              <Text style={styles.inputLabel}>Pilih Kategori Pengeluaran</Text>
+              {categories.length === 0 ? (
+                <Text style={styles.emptyCatText}>
+                  Memuat kategori pengeluaran...
+                </Text>
+              ) : (
+                <View style={styles.categoryPickerList}>
+                  {categories.map((cat) => {
+                    const isSelected = selectedCatId === cat.id;
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[
+                          styles.categoryChip,
+                          isSelected && styles.categoryChipSelected,
+                        ]}
+                        onPress={() => setSelectedCatId(cat.id)}
+                        activeOpacity={0.7}
+                      >
+                        <View
+                          style={[
+                            styles.catDot,
+                            { backgroundColor: cat.color || colors.plum },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.catChipText,
+                            isSelected && styles.catChipTextSelected,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {cat.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Tipe Batas */}
+              <Text style={styles.inputLabel}>Metode Batas Anggaran</Text>
+              <View style={styles.amountTypeRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.amountTypeBtn,
+                    amountType === "fixed" && styles.amountTypeBtnActive,
+                  ]}
+                  onPress={() => setAmountType("fixed")}
+                >
+                  <Text
+                    style={[
+                      styles.amountTypeText,
+                      amountType === "fixed" && styles.amountTypeTextActive,
+                    ]}
+                  >
+                    Nominal Tetap (Rp)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.amountTypeBtn,
+                    amountType === "percentage" && styles.amountTypeBtnActive,
+                  ]}
+                  onPress={() => setAmountType("percentage")}
+                >
+                  <Text
+                    style={[
+                      styles.amountTypeText,
+                      amountType === "percentage" && styles.amountTypeTextActive,
+                    ]}
+                  >
+                    Persentase (%)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Nilai Input */}
+              <Text style={styles.inputLabel}>
+                {amountType === "fixed"
+                  ? "Batas Anggaran Bulanan (Rp)"
+                  : "Persentase Alokasi Dari Pemasukan (%)"}
+              </Text>
+              <View style={styles.modalInputWrap}>
+                <Text style={styles.modalInputPrefix}>
+                  {amountType === "fixed" ? "Rp" : "%"}
+                </Text>
+                <TextInput
+                  style={styles.modalTextInput}
+                  keyboardType="numeric"
+                  placeholder={amountType === "fixed" ? "1000000" : "20"}
+                  placeholderTextColor={colors.textMuted}
+                  value={amountValue}
+                  onChangeText={setAmountValue}
+                />
+              </View>
+
+              {amountType === "percentage" && incomeBasis > 0 && amountValue ? (
+                <Text style={styles.modalEstimatedText}>
+                  Estimasi batas: Rp{" "}
+                  {(
+                    Math.round(
+                      (incomeBasis * (parseFloat(amountValue) || 0)) / 100
+                    )
+                  ).toLocaleString("id-ID")}{" "}
+                  (berdasarkan basis pemasukan Rp {incomeBasis.toLocaleString("id-ID")})
+                </Text>
+              ) : null}
+
+              <View style={styles.modalBtnRow}>
+                <TouchableOpacity
+                  style={styles.cancelModalBtn}
+                  onPress={() => setItemModalVisible(false)}
+                >
+                  <Text style={styles.cancelModalBtnText}>Batal</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.saveModalBtn,
+                    submittingItem && { opacity: 0.6 },
+                  ]}
+                  onPress={handleSaveBudgetItem}
+                  disabled={submittingItem}
+                >
+                  {submittingItem ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveModalBtnText}>
+                      {editingItem ? "Perbarui" : "Tambahkan"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -656,6 +1010,243 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   applyBudgetBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  addPosBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.plum,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  addPosBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  emptyActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.plum,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
+    marginTop: 14,
+  },
+  emptyActionBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  itemTitleGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    marginRight: 8,
+  },
+  categoryDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  itemActionsGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  actionIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.slateLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 28,
+    padding: 22,
+    width: "100%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.textPrimary,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.textPrimary,
+    marginBottom: 8,
+    marginTop: 10,
+  },
+  emptyCatText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontStyle: "italic",
+    marginBottom: 10,
+  },
+  categoryPickerList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: colors.slateLight,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  categoryChipSelected: {
+    backgroundColor: "#F3E8FF",
+    borderColor: colors.plum,
+  },
+  catDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  catChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  catChipTextSelected: {
+    color: colors.plum,
+    fontWeight: "800",
+  },
+  amountTypeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 6,
+  },
+  amountTypeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: colors.slateLight,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  amountTypeBtnActive: {
+    backgroundColor: "#F3E8FF",
+    borderColor: colors.plum,
+  },
+  amountTypeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textMuted,
+  },
+  amountTypeTextActive: {
+    color: colors.plum,
+    fontWeight: "800",
+  },
+  modalInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.slateLight,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 6,
+  },
+  modalInputPrefix: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.plum,
+    marginRight: 6,
+  },
+  modalTextInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.textPrimary,
+  },
+  modalEstimatedText: {
+    fontSize: 11,
+    color: colors.coral,
+    fontWeight: "600",
+    marginBottom: 8,
+    marginLeft: 2,
+  },
+  modalBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 20,
+    marginBottom: 6,
+  },
+  cancelModalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: colors.slateLight,
+    alignItems: "center",
+  },
+  cancelModalBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.textMuted,
+  },
+  saveModalBtn: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: colors.plum,
+    alignItems: "center",
+  },
+  saveModalBtnText: {
     fontSize: 14,
     fontWeight: "800",
     color: "#FFFFFF",

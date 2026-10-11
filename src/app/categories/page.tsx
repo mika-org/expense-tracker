@@ -2,16 +2,22 @@
 
 import { useState, useEffect } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { getCategoriesAction, createCategoryAction, deleteCategoryAction } from "@/actions/categories";
-import { Plus, Trash2, X, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import {
+  getCategoriesAction,
+  createCategoryAction,
+  updateCategoryAction,
+  deleteCategoryAction,
+} from "@/actions/categories";
+import { Plus, Trash2, Edit2, X, ArrowUpRight, ArrowDownRight } from "lucide-react";
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [tab, setTab] = useState<"expense" | "income">("expense");
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  // New Category Form
+  // Form State
   const [name, setName] = useState("");
   const [color, setColor] = useState("#3B82F6");
   const [submitting, setSubmitting] = useState(false);
@@ -28,15 +34,39 @@ export default function CategoriesPage() {
     loadCategories();
   }, []);
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreateModal() {
+    setEditingId(null);
+    setName("");
+    setColor("#3B82F6");
+    setIsModalOpen(true);
+  }
+
+  function openEditModal(cat: any) {
+    setEditingId(cat.id);
+    setName(cat.name);
+    setColor(cat.color || "#3B82F6");
+    setIsModalOpen(true);
+  }
+
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    await createCategoryAction({
-      name,
-      type: tab,
-      color,
-    });
+    if (editingId) {
+      await updateCategoryAction({
+        id: editingId,
+        name,
+        type: tab,
+        color,
+      });
+    } else {
+      await createCategoryAction({
+        name,
+        type: tab,
+        color,
+      });
+    }
     setName("");
+    setEditingId(null);
     setIsModalOpen(false);
     setSubmitting(false);
     loadCategories();
@@ -84,7 +114,7 @@ export default function CategoriesPage() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={openCreateModal}
           className="flex items-center gap-2 px-5 py-2.5 bg-[#F27A54] hover:bg-[#e06b46] text-white font-bold text-xs rounded-2xl shadow-lg shadow-[#F27A54]/25 self-start sm:self-auto transition-all"
         >
           <Plus className="w-4 h-4 stroke-[3]" />
@@ -112,25 +142,37 @@ export default function CategoriesPage() {
               </div>
             </div>
 
-            {!cat.isDefault && (
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => handleDelete(cat.id)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                onClick={() => openEditModal(cat)}
+                title="Ubah Kategori"
+                className="p-1.5 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
               >
-                <Trash2 className="w-4 h-4" />
+                <Edit2 className="w-4 h-4" />
               </button>
-            )}
+              {!cat.isDefault && (
+                <button
+                  onClick={() => handleDelete(cat.id)}
+                  title="Hapus Kategori"
+                  className="p-1.5 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
 
-      {/* New Category Modal */}
+      {/* New / Edit Category Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in">
           <div className="w-full max-w-md bg-white border border-slate-100 rounded-[32px] p-6 text-slate-800 shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <h3 className="text-base font-black text-slate-900">
-                Tambah Kategori {tab === "income" ? "Pemasukan" : "Pengeluaran"}
+                {editingId
+                  ? `Ubah Kategori ${tab === "income" ? "Pemasukan" : "Pengeluaran"}`
+                  : `Tambah Kategori ${tab === "income" ? "Pemasukan" : "Pengeluaran"}`}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -140,7 +182,7 @@ export default function CategoriesPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-4">
+            <form onSubmit={handleSave} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Nama Kategori</label>
                 <input
@@ -179,7 +221,11 @@ export default function CategoriesPage() {
                   disabled={submitting}
                   className="px-5 py-2.5 bg-[#F27A54] hover:bg-[#e06b46] text-white font-bold text-xs rounded-2xl shadow-lg shadow-[#F27A54]/25"
                 >
-                  {submitting ? "Menyimpan..." : "Simpan Kategori"}
+                  {submitting
+                    ? "Menyimpan..."
+                    : editingId
+                    ? "Simpan Perubahan"
+                    : "Simpan Kategori"}
                 </button>
               </div>
             </form>

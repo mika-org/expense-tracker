@@ -20,10 +20,12 @@ import {
   CheckCircle2,
   Trash2,
   X,
+  Calendar,
 } from "lucide-react-native";
 import { colors } from "../theme/colors";
 import { api } from "../services/api";
 import { FadeInView, ScalePress, AnimatedProgressBar } from "../components/AnimatedComponents";
+import { DatePickerModal } from "../components/DatePickerModal";
 
 interface SavingsScreenProps {
   onBack: () => void;
@@ -52,6 +54,8 @@ export const SavingsScreen = ({ onBack }: SavingsScreenProps) => {
   const [formTargetAmount, setFormTargetAmount] = useState("");
   const [formInitialAmount, setFormInitialAmount] = useState("");
   const [formTargetDate, setFormTargetDate] = useState("");
+  const [formTargetDateLabel, setFormTargetDateLabel] = useState("");
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
 
   // Contribute Modal
   const [contributeModalVisible, setContributeModalVisible] = useState(false);
@@ -361,15 +365,23 @@ export const SavingsScreen = ({ onBack }: SavingsScreenProps) => {
               />
             </View>
 
+            {/* Target Date Picker */}
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Target Tanggal (Opsional: YYYY-MM-DD)</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="2026-12-31"
-                placeholderTextColor={colors.textMuted}
-                value={formTargetDate}
-                onChangeText={setFormTargetDate}
-              />
+              <Text style={styles.formLabel}>Target Tanggal Capaian</Text>
+              <TouchableOpacity
+                style={styles.datePickerTrigger}
+                onPress={() => setDatePickerVisible(true)}
+              >
+                <Calendar size={18} color={colors.coral} />
+                <Text
+                  style={[
+                    styles.datePickerTriggerText,
+                    formTargetDate ? { color: colors.textPrimary } : null,
+                  ]}
+                >
+                  {formTargetDateLabel || "Pilih Target Tanggal"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <ScalePress
@@ -446,6 +458,18 @@ export const SavingsScreen = ({ onBack }: SavingsScreenProps) => {
           </View>
         </View>
       </Modal>
+
+      {/* DatePickerModal for Savings Target Date */}
+      <DatePickerModal
+        visible={datePickerVisible}
+        title="Pilih Target Tanggal Tabungan"
+        initialDate={formTargetDate || null}
+        onClose={() => setDatePickerVisible(false)}
+        onSelectDate={(dateStr, label) => {
+          setFormTargetDate(dateStr);
+          setFormTargetDateLabel(label);
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -590,6 +614,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: colors.textPrimary,
+  },
+  datePickerTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.slateLight,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  datePickerTriggerText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textMuted,
   },
   saveBtn: {
     backgroundColor: colors.plum,

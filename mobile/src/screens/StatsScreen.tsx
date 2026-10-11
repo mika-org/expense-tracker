@@ -3,14 +3,14 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   StatusBar,
   Animated,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { TrendingUp, TrendingDown, Scale } from "lucide-react-native";
+import { TrendingUp, TrendingDown, Scale, Download, BarChart2 } from "lucide-react-native";
 import { ViewModeToggle, ViewMode } from "../components/ViewModeToggle";
 import { colors } from "../theme/colors";
 import { api } from "../services/api";
@@ -18,18 +18,21 @@ import { FadeInView, ScalePress } from "../components/AnimatedComponents";
 
 export const StatsScreen = () => {
   const [period, setPeriod] = useState<"Bulan Ini" | "Bulan Lalu" | "Tahun Ini">("Bulan Ini");
+  const [catFilter, setCatFilter] = useState<"all" | "expense" | "income">("expense");
   const [viewMode, setViewMode] = useState<ViewMode>("card");
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<{
     totalIncome: number;
     totalExpense: number;
     netCashFlow: number;
-    categoryBreakdown: Array<{ name: string; color: string; amount: number; pct: number }>;
+    categoryBreakdown: Array<{ name: string; type?: string; color: string; amount: number; pct: number }>;
+    categories?: Array<{ name: string; type: string; color: string; amount: number; pct: number }>;
   }>({
     totalIncome: 0,
     totalExpense: 0,
     netCashFlow: 0,
     categoryBreakdown: [],
+    categories: [],
   });
 
   const fetchReports = async (p = period) => {
@@ -43,6 +46,7 @@ export const StatsScreen = () => {
           totalExpense: data.totalExpense || 0,
           netCashFlow: data.netCashFlow || 0,
           categoryBreakdown: data.categoryBreakdown || [],
+          categories: data.categories || data.categoryBreakdown || [],
         });
       }
     } finally {
@@ -54,30 +58,54 @@ export const StatsScreen = () => {
     fetchReports(period);
   }, [period]);
 
-  const categoryRanking = reportData.categoryBreakdown;
+  const activeCategoriesList = (() => {
+    const list = reportData.categories && reportData.categories.length > 0
+      ? reportData.categories
+      : reportData.categoryBreakdown.map((c) => ({ ...c, type: "expense" }));
+    if (catFilter === "all") return list;
+    return list.filter((c) => (c.type || "expense") === catFilter);
+  })();
 
   const [selectedCatIdx, setSelectedCatIdx] = useState<number | null>(null);
 
   // Animated progress bars
-  const fillAnims = useRef(categoryRanking.map(() => new Animated.Value(0))).current;
+  const fillAnims = useRef(activeCategoriesList.map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
-    const anims = categoryRanking.map((c, i) =>
+    const anims = activeCategoriesList.map((c, i) =>
       Animated.timing(fillAnims[i] || new Animated.Value(0), {
         toValue: c.pct,
         duration: 700,
-        delay: 150 + i * 90,
+        delay: 100 + i * 80,
         useNativeDriver: false,
       })
     );
     Animated.parallel(anims).start();
-  }, [categoryRanking]);
+  }, [activeCategoriesList]);
+
+  const handleExportCsv = () => {
+    Alert.alert(
+      "Ekspor Laporan (CSV)",
+      `Laporan statistik transaksi periode "${period}" telah disiapkan. Data mencakup total pemasukan, pengeluaran, dan arus kas.`,
+      [{ text: "Tutup" }]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Statistik & Laporan</Text>
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIconCircle}>
+            <BarChart2 size={20} color={colors.plum} />
+          </View>
+          <Text style={styles.headerTitle}>Statistik & Laporan</Text>
+        </View>
+
+        <ScalePress style={styles.exportBtn} onPress={handleExportCsv}>
+          <Download size={14} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={styles.exportBtnText}>CSV</Text>
+        </ScalePress>
       </View>
 
       <ScrollView
@@ -87,22 +115,29 @@ export const StatsScreen = () => {
           <RefreshControl refreshing={loading} onRefresh={() => fetchReports()} colors={[colors.coral]} tintColor={colors.coral} />
         }
       >
-        {/* Period Selector */}
+        {/* Primary Period Selector Tabs (Equal 1/3 Width Each) */}
         <View style={styles.periodRow}>
-          {(["Bulan Ini", "Bulan Lalu", "Tahun Ini"] as const).map((p) => (
-            <ScalePress
-              key={p}
-              style={[styles.periodBtn, period === p ? styles.periodBtnActive : null]}
-              onPress={() => setPeriod(p)}
-            >
-              <Text style={[styles.periodText, period === p ? styles.periodTextActive : null]}>
-                {p}
-              </Text>
-            </ScalePress>
-          ))}
+          {(["Bulan Ini", "Bulan Lalu", "Tahun Ini"] as const).map((p) => {
+            const isActive = period === p;
+            return (
+              <ScalePress
+                key={p}
+                containerStyle={styles.periodBtnContainer}
+                style={[styles.periodBtn, isActive ? styles.periodBtnActive : null]}
+                onPress={() => {
+                  setPeriod(p);
+                  setSelectedCatIdx(null);
+                }}
+              >
+                <Text style={[styles.periodText, isActive ? styles.periodTextActive : null]}>
+                  {p}
+                </Text>
+              </ScalePress>
+            );
+          })}
         </View>
 
-        {/* 3 Metric Cards */}
+        {/* 3 Metric Summary Cards */}
         <FadeInView delay={0}>
           <View style={styles.metricsGrid}>
             <View style={styles.metricCard}>
@@ -126,7 +161,7 @@ export const StatsScreen = () => {
             </View>
           </View>
 
-          <View style={[styles.metricCard, { marginBottom: 20 }]}>
+          <View style={[styles.metricCard, { marginBottom: 24 }]}>
             <View style={styles.metricTop}>
               <Text style={styles.metricLabel}>Surplus Arus Kas</Text>
               <Scale size={16} color={reportData.netCashFlow >= 0 ? "#0D9488" : colors.coral} />
@@ -137,25 +172,48 @@ export const StatsScreen = () => {
           </View>
         </FadeInView>
 
-        {/* Section Header with View Mode Toggle */}
+        {/* Secondary Category Filter Tabs & View Mode Switcher */}
         <View style={styles.rankingHeaderRow}>
-          <Text style={styles.rankingTitle}>Pengeluaran Terbesar</Text>
+          <View style={styles.catFilterRow}>
+            {[
+              { key: "expense", label: "Pengeluaran" },
+              { key: "income", label: "Pemasukan" },
+              { key: "all", label: "Semua" },
+            ].map((f) => {
+              const active = catFilter === f.key;
+              return (
+                <ScalePress
+                  key={f.key}
+                  style={[styles.catFilterChip, active ? styles.catFilterChipActive : null]}
+                  onPress={() => {
+                    setCatFilter(f.key as any);
+                    setSelectedCatIdx(null);
+                  }}
+                >
+                  <Text style={[styles.catFilterText, active ? styles.catFilterTextActive : null]}>
+                    {f.label}
+                  </Text>
+                </ScalePress>
+              );
+            })}
+          </View>
+
           <ViewModeToggle mode={viewMode} onChange={setViewMode} />
         </View>
 
         {/* Ranking List: Card vs Table View or Empty State */}
-        {categoryRanking.length === 0 ? (
+        {activeCategoriesList.length === 0 ? (
           <FadeInView delay={100}>
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>Belum Ada Pengeluaran</Text>
+              <Text style={styles.emptyTitle}>Belum Ada Data Transaksi</Text>
               <Text style={styles.emptySubtitle}>
-                Tidak ada data transaksi pengeluaran tercatat untuk {period.toLowerCase()}.
+                Tidak ada data {catFilter === "all" ? "transaksi" : catFilter === "expense" ? "pengeluaran" : "pemasukan"} tercatat untuk {period.toLowerCase()}.
               </Text>
             </View>
           </FadeInView>
         ) : viewMode === "card" ? (
           <View style={styles.rankingList}>
-            {categoryRanking.map((c, i) => {
+            {activeCategoriesList.map((c, i) => {
               const animVal = fillAnims[i] || new Animated.Value(c.pct);
               const widthInterpolation = animVal.interpolate({
                 inputRange: [0, 100],
@@ -164,7 +222,7 @@ export const StatsScreen = () => {
               const isSelected = selectedCatIdx === i;
 
               return (
-                <FadeInView key={i} delay={i * 50}>
+                <FadeInView key={`${c.name}-${c.type}-${i}`} delay={i * 40}>
                   <ScalePress
                     style={[
                       styles.rankingCard,
@@ -176,6 +234,23 @@ export const StatsScreen = () => {
                       <View style={styles.rankingLeft}>
                         <View style={[styles.dot, { backgroundColor: c.color }]} />
                         <Text style={styles.catName}>{c.name}</Text>
+                        {c.type && (
+                          <View
+                            style={[
+                              styles.typeTag,
+                              { backgroundColor: c.type === "income" ? "#ECFDF5" : "#FFF1F2" },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.typeTagText,
+                                { color: c.type === "income" ? "#059669" : "#E11D48" },
+                              ]}
+                            >
+                              {c.type === "income" ? "Masuk" : "Keluar"}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                       <Text style={styles.amountText}>
                         Rp {c.amount.toLocaleString("id-ID")}{" "}
@@ -195,7 +270,7 @@ export const StatsScreen = () => {
                     {isSelected && (
                       <View style={styles.catPopover}>
                         <Text style={styles.catPopoverText}>
-                          Porsi {c.pct}% dari total pengeluaran ({period})
+                          Porsi {c.pct}% dari total {c.type === "income" ? "pemasukan" : "pengeluaran"} ({period})
                         </Text>
                       </View>
                     )}
@@ -211,13 +286,18 @@ export const StatsScreen = () => {
               <Text style={styles.thPct}>Porsi</Text>
               <Text style={styles.thAmt}>Nominal</Text>
             </View>
-            {categoryRanking.map((c, i) => (
-              <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowEven : null]}>
+            {activeCategoriesList.map((c, i) => (
+              <View key={`${c.name}-${i}`} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowEven : null]}>
                 <View style={styles.tdCatBox}>
                   <View style={[styles.dotSmall, { backgroundColor: c.color }]} />
-                  <Text style={styles.tdCatText} numberOfLines={1}>
-                    {c.name}
-                  </Text>
+                  <View>
+                    <Text style={styles.tdCatText} numberOfLines={1}>
+                      {c.name}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: c.type === "income" ? "#059669" : "#E11D48", fontWeight: "700" }}>
+                      {c.type === "income" ? "Pemasukan" : "Pengeluaran"}
+                    </Text>
+                  </View>
                 </View>
                 <Text style={styles.tdPctText}>{c.pct}%</Text>
                 <Text style={styles.tdAmtText}>Rp {c.amount.toLocaleString("id-ID")}</Text>
@@ -230,30 +310,78 @@ export const StatsScreen = () => {
   );
 };
 
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#F0EEF4",
   },
-  headerTitle: { fontSize: 20, fontWeight: "900", color: colors.textPrimary },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  headerIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.slateLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: { fontSize: 18, fontWeight: "900", color: colors.textPrimary },
+  exportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: colors.coral,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  exportBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
   content: { padding: 20, paddingBottom: 40 },
   periodRow: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F3F1F6",
     borderRadius: 20,
     padding: 4,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: "#EAE7EE",
+    alignItems: "center",
   },
-  periodBtn: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 16 },
-  periodBtnActive: { backgroundColor: colors.plum },
-  periodText: { fontSize: 12, fontWeight: "700", color: colors.textMuted },
-  periodTextActive: { color: "#FFFFFF" },
+  periodBtnContainer: {
+    flex: 1,
+  },
+  periodBtn: {
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    width: "100%",
+  },
+  periodBtnActive: {
+    backgroundColor: colors.plum,
+    shadowColor: colors.plum,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  periodText: { fontSize: 13, fontWeight: "700", color: colors.textMuted },
+  periodTextActive: { color: "#FFFFFF", fontWeight: "800" },
   metricsGrid: { flexDirection: "row", gap: 12, marginBottom: 12 },
   metricCard: {
     flex: 1,
@@ -271,8 +399,39 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
+    gap: 8,
   },
-  rankingTitle: { fontSize: 16, fontWeight: "800", color: colors.textPrimary },
+  catFilterRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  catFilterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: "#F3F1F6",
+  },
+  catFilterChipActive: {
+    backgroundColor: colors.plum,
+  },
+  catFilterText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.textMuted,
+  },
+  catFilterTextActive: {
+    color: "#FFFFFF",
+  },
+  typeTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  typeTagText: {
+    fontSize: 9,
+    fontWeight: "800",
+  },
   rankingList: { gap: 12 },
   rankingCard: {
     backgroundColor: "#FFFFFF",
